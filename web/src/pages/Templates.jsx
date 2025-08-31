@@ -18,6 +18,7 @@ const Templates = () => {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newTemplateName, setNewTemplateName] = useState('')
   const [activeTab, setActiveTab] = useState('basic')
+  const [lineWrapping, setLineWrapping] = useState(false)
   const [theme, setTheme] = useState(() => {
     // Check if dark mode is enabled
     return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
@@ -205,6 +206,18 @@ const Templates = () => {
                 </div>
                 <div className="flex gap-2">
                   <button 
+                    onClick={() => setLineWrapping(!lineWrapping)}
+                    className="btn btn-secondary"
+                    title={lineWrapping ? "Disable line wrapping" : "Enable line wrapping"}
+                  >
+                    <IconDuotone 
+                      icon={lineWrapping ? "text-width" : "arrows-alt-h"} 
+                      className="mr-2" 
+                      color="text-purple-500" 
+                    />
+                    {lineWrapping ? "Unwrap" : "Wrap Lines"}
+                  </button>
+                  <button 
                     onClick={() => { 
                       if (selectedTemplate) {
                         void restoreMutation.mutate(selectedTemplate);
@@ -237,6 +250,7 @@ const Templates = () => {
                   height="calc(100vh - 200px)"
                   readOnly={false}
                   placeholder="Enter your Jinja2 template here..."
+                  lineWrapping={lineWrapping}
                 />
                 
                 {/* Jinja2 Cheatsheet Overlay */}

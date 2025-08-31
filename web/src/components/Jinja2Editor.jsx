@@ -7,7 +7,7 @@ import { StreamLanguage } from '@codemirror/language';
 import { autocompletion, CompletionContext } from '@codemirror/autocomplete';
 import { linter } from '@codemirror/lint';
 import { search, searchKeymap } from '@codemirror/search';
-import { keymap } from '@codemirror/view';
+import { keymap, EditorView } from '@codemirror/view';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 
 /**
@@ -240,7 +240,8 @@ const Jinja2Editor = ({
   theme = 'dark',
   height = '600px',
   readOnly = false,
-  placeholder = 'Enter your Jinja2 template here...'
+  placeholder = 'Enter your Jinja2 template here...',
+  lineWrapping = false  // New prop to control line wrapping
 }) => {
   // Extensions for the editor
   const extensions = useMemo(() => [
@@ -248,6 +249,34 @@ const Jinja2Editor = ({
     autocompletion({ override: [jinja2Completions] }),
     linter(jinja2Linter()),
     search(),
+    // Configure editor view with proper wrapping and scrolling
+    EditorView.theme({
+      '&': {
+        maxWidth: '100%',
+      },
+      '.cm-scroller': {
+        fontFamily: 'ui-monospace, monospace',
+        fontSize: '14px',
+        overflowX: lineWrapping ? 'hidden' : 'auto',
+      },
+      '.cm-content': {
+        minHeight: '200px',
+        padding: '10px',
+      },
+      '.cm-editor': {
+        height: height,
+      },
+      '.cm-editor.cm-focused': {
+        outline: 'none',
+      },
+      // Fix for long lines
+      '.cm-line': {
+        wordBreak: lineWrapping ? 'break-word' : 'normal',
+        whiteSpace: lineWrapping ? 'pre-wrap' : 'pre',
+      }
+    }),
+    // Line wrapping extension
+    lineWrapping ? EditorView.lineWrapping : [],
     keymap.of([
       ...defaultKeymap,
       ...searchKeymap,
@@ -266,12 +295,11 @@ const Jinja2Editor = ({
         },
       },
     ]),
-  ], [onSave]);
+  ], [onSave, lineWrapping, height]);
 
   return (
     <div className="jinja2-editor-wrapper" style={{
       width: '100%',
-      maxWidth: '100%',
       overflow: 'hidden',
       position: 'relative'
     }}>
@@ -296,26 +324,7 @@ const Jinja2Editor = ({
           highlightSelectionMatches: true,
           searchKeymap: true,
         }}
-        style={{
-          maxWidth: '100%',
-          fontSize: '14px'
-        }}
       />
-      <style>{`
-        .jinja2-editor-wrapper .cm-editor {
-          max-width: 100%;
-        }
-        .jinja2-editor-wrapper .cm-scroller {
-          overflow-x: auto !important;
-          overflow-y: auto !important;
-        }
-        .jinja2-editor-wrapper .cm-content {
-          white-space: pre !important;
-        }
-        .jinja2-editor-wrapper .cm-line {
-          white-space: pre !important;
-        }
-      `}</style>
     </div>
   );
 };

@@ -840,6 +840,15 @@ class WebInterfaceService:
     
     async def _periodic_stats_refresh(self):
         """Periodically refresh Jellyfin stats"""
+        # Do initial refresh immediately on startup
+        try:
+            self.logger.info("Performing initial Jellyfin stats collection...")
+            await self.refresh_jellyfin_stats()
+            self.logger.info("Initial Jellyfin stats collection complete")
+        except Exception as e:
+            self.logger.error(f"Initial stats refresh failed: {e}")
+        
+        # Then refresh periodically
         while True:
             try:
                 # Wait 30 minutes between refreshes
@@ -866,21 +875,29 @@ class WebInterfaceService:
         try:
             # Get Jellyfin stats if webhook service is available
             if self.webhook_service and self.webhook_service.jellyfin:
+                self.logger.debug("Fetching stats from Jellyfin server...")
                 stats = await self.webhook_service.jellyfin.get_server_stats()
+                self.logger.debug(f"Retrieved Jellyfin stats: {len(stats)} fields")
                 
                 # Save to database
                 if self.webhook_service.db:
+                    self.logger.debug("Saving stats to database...")
                     await self.webhook_service.db.save_jellyfin_stats(stats)
+                    self.logger.info(f"Jellyfin stats saved to database successfully")
+                else:
+                    self.logger.warning("Database not available to save Jellyfin stats")
                 
                 return stats
             else:
+                self.logger.warning(f"Cannot fetch Jellyfin stats - webhook_service: {self.webhook_service is not None}, jellyfin: {self.webhook_service.jellyfin if self.webhook_service else None}")
                 # Try to get from database
                 if self.webhook_service and self.webhook_service.db:
+                    self.logger.debug("Fetching cached stats from database...")
                     return await self.webhook_service.db.get_latest_jellyfin_stats()
                 
             return {}
         except Exception as e:
-            self.logger.error(f"Failed to refresh Jellyfin stats: {e}")
+            self.logger.error(f"Failed to refresh Jellyfin stats: {e}", exc_info=True)
             return {}
     
     async def get_overview_stats(self) -> OverviewStats:

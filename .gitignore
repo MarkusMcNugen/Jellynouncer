@@ -76,3 +76,8 @@ node_modules/
 /overview-fixed.png
 /templates-fixed.png
 /tests/test-fixes.spec.js
+/_ul
+/dashboard-actual.png
+/logs-overlap-actual.png
+/templates-editor-actual.png
+/tests/test-actual-issues.spec.js

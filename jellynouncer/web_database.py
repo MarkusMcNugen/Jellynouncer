@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional
 import logging
 
 # Database path
-DATA_DIR = Path(os.getenv("DATA_DIR", "/data"))
+DATA_DIR = Path(os.getenv("DATA_DIR", "/app/data"))
 WEB_DB_PATH = DATA_DIR / "web_interface.db"
 
 logger = logging.getLogger(__name__)

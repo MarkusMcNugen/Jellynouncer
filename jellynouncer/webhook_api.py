@@ -84,7 +84,6 @@ from typing import Dict, Any, Optional
 
 # Third-party imports for async web framework and HTTP operations
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 import uvicorn
@@ -159,11 +158,11 @@ async def lifespan(app_instance: FastAPI):
             # Try to load full configuration
             app_config = validator.load_and_validate_config()
             app_log_level = app_config.server.log_level
-        except Exception as config_error:
+        except Exception as config_load_error:
             # If config loading fails, fall back to environment variable or default
             app_log_level = os.getenv("LOG_LEVEL", app_config.server.log_level if app_config else "INFO")
             # Use print since logging isn't set up yet
-            print(f"Warning: Could not load config for log level, using {app_log_level}: {config_error}")
+            print(f"Warning: Could not load config for log level, using {app_log_level}: {config_load_error}")
 
         # Initialize logging with the determined log level
         # The setup_logging function creates both console and file handlers
@@ -196,15 +195,15 @@ async def lifespan(app_instance: FastAPI):
         # Everything after this yield runs during shutdown
         yield
 
-    except Exception as e:
+    except Exception as startup_error:
         # Use logger if available, otherwise fall back to print
         if logger:
-            logger.error(f"Failed to start Jellynouncer: {e}", exc_info=True)
+            logger.error(f"Failed to start Jellynouncer: {startup_error}", exc_info=True)
         else:
-            print(f"Failed to start Jellynouncer (logging not initialized): {e}")
+            print(f"Failed to start Jellynouncer (logging not initialized): {startup_error}")
             import traceback
             traceback.print_exc()
-        raise SystemExit(f"Service startup failed: {e}")
+        raise SystemExit(f"Service startup failed: {startup_error}")
 
     # === SHUTDOWN PHASE ===
     # This code runs when the FastAPI application stops
@@ -232,11 +231,11 @@ async def lifespan(app_instance: FastAPI):
         else:
             print("Jellynouncer shutdown completed successfully")
 
-    except Exception as e:
+    except Exception as shutdown_error:
         if logger:
-            logger.error(f"Error during shutdown: {e}", exc_info=True)
+            logger.error(f"Error during shutdown: {shutdown_error}", exc_info=True)
         else:
-            print(f"Error during shutdown: {e}")
+            print(f"Error during shutdown: {shutdown_error}")
             import traceback
             traceback.print_exc()
 
@@ -307,65 +306,87 @@ async def receive_webhook(request: Request):
         )
 
     # Check if webhook authentication is required
+    WebDatabaseManager = None  # Default to None if import fails
     try:
         # Import WebDatabaseManager from web_api
         from jellynouncer.web_database import WebDatabaseManager
-        web_db = WebDatabaseManager()
-        await web_db.initialize()
-        settings = await web_db.get_security_settings()
-        
-        if settings.get("require_webhook_auth", False):
-            # Check for authorization header
-            auth_header = request.headers.get("authorization")
-            if not auth_header or not auth_header.startswith("Bearer "):
-                logger.warning("Webhook authentication required but no valid token provided")
-                raise HTTPException(
-                    status_code=401,
-                    detail="Authentication required for webhook endpoint"
-                )
-            
-            # Validate the token (same tokens as web interface)
-            token = auth_header.replace("Bearer ", "")
-            try:
-                import jwt
-                from datetime import datetime
-                
-                # Get JWT secret from environment or config
-                jwt_secret = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
-                payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-                
-                # Accept both access tokens and refresh tokens for webhook auth
-                token_type = payload.get("type")
-                if token_type not in ["access", "refresh"]:
-                    logger.warning(f"Invalid token type for webhook access: {token_type}")
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Invalid token type for webhook access"
-                    )
-                
-                # Log successful authentication
-                username = payload.get("username", "unknown")
-                logger.info(f"Webhook authenticated successfully for user: {username}")
-                
-            except jwt.ExpiredSignatureError:
-                logger.warning("Webhook token has expired")
-                raise HTTPException(
-                    status_code=401,
-                    detail="Token has expired"
-                )
-            except jwt.InvalidTokenError as e:
-                logger.warning(f"Invalid webhook token: {str(e)}")
-                raise HTTPException(
-                    status_code=401,
-                    detail="Invalid authentication token"
-                )
     except ImportError:
         # Web database not available, skip auth check
-        logger.debug("Web database not available, skipping webhook auth check")
-    except Exception as e:
-        logger.error(f"Error checking webhook auth: {str(e)}")
-        # Don't block webhooks if auth check fails
-        pass
+        if webhook_service and webhook_service.logger:
+            webhook_service.logger.debug("Web database not available, skipping webhook auth check")
+        WebDatabaseManager = None
+    
+    # Only check auth if WebDatabaseManager is available
+    if WebDatabaseManager:
+        try:
+            web_db = WebDatabaseManager()
+            await web_db.initialize()
+            settings = await web_db.get_security_settings()
+            
+            if settings.get("require_webhook_auth", False):
+                # Check for authorization header
+                auth_header = request.headers.get("authorization")
+                if not auth_header or not auth_header.startswith("Bearer "):
+                    if webhook_service and webhook_service.logger:
+                        webhook_service.logger.warning("Webhook authentication required but no valid token provided")
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Authentication required for webhook endpoint"
+                    )
+                
+                # Validate the token (same tokens as web interface)
+                token = auth_header.replace("Bearer ", "")
+                try:
+                    import jwt
+                    from datetime import datetime
+                except ImportError:
+                    jwt = None
+                    if webhook_service and webhook_service.logger:
+                        webhook_service.logger.error("JWT library not available for webhook authentication")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="JWT authentication not available"
+                    )
+                
+                try:
+                    # Get JWT secret from environment or config
+                    jwt_secret = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
+                    payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+                    
+                    # Accept both access tokens and refresh tokens for webhook auth
+                    token_type = payload.get("type")
+                    if token_type not in ["access", "refresh"]:
+                        if webhook_service and webhook_service.logger:
+                            webhook_service.logger.warning(f"Invalid token type for webhook access: {token_type}")
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Invalid token type for webhook access"
+                        )
+                    
+                    # Log successful authentication
+                    username = payload.get("username", "unknown")
+                    if webhook_service and webhook_service.logger:
+                        webhook_service.logger.info(f"Webhook authenticated successfully for user: {username}")
+                    
+                except jwt.ExpiredSignatureError:
+                    if webhook_service and webhook_service.logger:
+                        webhook_service.logger.warning("Webhook token has expired")
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Token has expired"
+                    )
+                except jwt.InvalidTokenError as jwt_error:
+                    if webhook_service and webhook_service.logger:
+                        webhook_service.logger.warning(f"Invalid webhook token: {str(jwt_error)}")
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Invalid authentication token"
+                    )
+        except Exception as auth_error:
+            if webhook_service and webhook_service.logger:
+                webhook_service.logger.error(f"Error checking webhook auth: {str(auth_error)}")
+            # Don't block webhooks if auth check fails
+            pass
 
     try:
         # Get raw body once - we'll use it for both debug logging and parsing
@@ -375,11 +396,11 @@ async def receive_webhook(request: Request):
         try:
             json_data = json.loads(raw_body)
             payload = WebhookPayload(**json_data)
-        except (json.JSONDecodeError, ValidationError) as e:
-            webhook_service.logger.error(f"Failed to parse webhook payload: {e}")
+        except (json.JSONDecodeError, ValidationError) as parse_error:
+            webhook_service.logger.error(f"Failed to parse webhook payload: {parse_error}")
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid webhook payload: {str(e)}"
+                detail=f"Invalid webhook payload: {str(parse_error)}"
             )
         
         # Debug logging when enabled
@@ -440,8 +461,8 @@ async def receive_webhook(request: Request):
                     else:
                         value_str = str(value)
                     webhook_service.logger.debug(f"    {key} ({value_type}): {value_str}")
-            except json.JSONDecodeError as e:
-                webhook_service.logger.debug(f"    JSON parse error: {e}")
+            except json.JSONDecodeError as json_error:
+                webhook_service.logger.debug(f"    JSON parse error: {json_error}")
             
             # Log payload details (structured)
             webhook_service.logger.debug("📦 WEBHOOK PAYLOAD (Validated):")
@@ -478,9 +499,9 @@ async def receive_webhook(request: Request):
         
         return result
 
-    except Exception as e:
+    except Exception as webhook_error:
         # Log the error but don't expose internal details to the client
-        webhook_service.logger.error(f"Webhook processing failed: {e}", exc_info=True)
+        webhook_service.logger.error(f"Webhook processing failed: {webhook_error}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Internal error processing webhook"
@@ -571,10 +592,10 @@ async def health_check():
         else:
             return JSONResponse(status_code=503, content=health_data, headers=headers)
 
-    except Exception as e:
+    except Exception as health_error:
         raise HTTPException(
             status_code=500,
-            detail=f"Health check failed: {str(e)}"
+            detail=f"Health check failed: {str(health_error)}"
         )
 
 
@@ -624,11 +645,11 @@ async def validate_templates():
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
-    except Exception as e:
-        webhook_service.logger.error(f"Template validation failed: {e}", exc_info=True)
+    except Exception as template_error:
+        webhook_service.logger.error(f"Template validation failed: {template_error}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Template validation failed: {str(e)}"
+            detail=f"Template validation failed: {str(template_error)}"
         )
 
 @app.get("/stats")
@@ -672,10 +693,10 @@ async def service_statistics():
 
         return stats
 
-    except Exception as e:
+    except Exception as stats_error:
         raise HTTPException(
             status_code=500,
-            detail=f"Error retrieving service statistics: {str(e)}"
+            detail=f"Error retrieving service statistics: {str(stats_error)}"
         )
 
 
@@ -732,10 +753,10 @@ async def trigger_manual_sync():
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
-    except Exception as e:
+    except Exception as sync_error:
         raise HTTPException(
             status_code=500,
-            detail=f"Error triggering manual sync: {str(e)}"
+            detail=f"Error triggering manual sync: {str(sync_error)}"
         )
 
 
@@ -927,8 +948,8 @@ if __name__ == "__main__":
         config_validator = ConfigurationValidator()
         config = config_validator.load_and_validate_config()
         print(f"Configuration loaded successfully from config file")
-    except Exception as e:
-        print(f"Warning: Could not load configuration file, using environment variables and defaults: {e}")
+    except Exception as config_error:
+        print(f"Warning: Could not load configuration file, using environment variables and defaults: {config_error}")
 
     # Get configuration from config file with environment variable overrides
     if config:

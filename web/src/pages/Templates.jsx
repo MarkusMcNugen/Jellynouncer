@@ -228,7 +228,7 @@ const Templates = () => {
               </div>
               
               {/* CodeMirror 6 Jinja2 Editor */}
-              <div className="flex-1 relative overflow-hidden">
+              <div className="flex-1 relative overflow-hidden" style={{ minWidth: 0 }}>
                 <Jinja2Editor
                   value={editorContent}
                   onChange={handleEditorChange}

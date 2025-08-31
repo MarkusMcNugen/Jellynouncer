@@ -269,7 +269,12 @@ const Jinja2Editor = ({
   ], [onSave]);
 
   return (
-    <div className="jinja2-editor-wrapper">
+    <div className="jinja2-editor-wrapper" style={{
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      position: 'relative'
+    }}>
       <CodeMirror
         value={value}
         height={height}
@@ -291,7 +296,26 @@ const Jinja2Editor = ({
           highlightSelectionMatches: true,
           searchKeymap: true,
         }}
+        style={{
+          maxWidth: '100%',
+          fontSize: '14px'
+        }}
       />
+      <style>{`
+        .jinja2-editor-wrapper .cm-editor {
+          max-width: 100%;
+        }
+        .jinja2-editor-wrapper .cm-scroller {
+          overflow-x: auto !important;
+          overflow-y: auto !important;
+        }
+        .jinja2-editor-wrapper .cm-content {
+          white-space: pre !important;
+        }
+        .jinja2-editor-wrapper .cm-line {
+          white-space: pre !important;
+        }
+      `}</style>
     </div>
   );
 };

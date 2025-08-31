@@ -281,40 +281,46 @@ class WebDatabaseManager:
             """)
             
             # Historical stats table for dashboard metrics
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS notification_stats (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    hour_bucket TEXT NOT NULL,  -- YYYY-MM-DD HH:00:00 for hourly aggregation
-                    day_bucket TEXT NOT NULL,   -- YYYY-MM-DD for daily aggregation
-                    
-                    -- Notification counts
-                    notifications_sent INTEGER DEFAULT 0,
-                    notifications_failed INTEGER DEFAULT 0,
-                    
-                    -- By type
-                    new_items INTEGER DEFAULT 0,
-                    upgraded_items INTEGER DEFAULT 0,
-                    deleted_items INTEGER DEFAULT 0,
-                    
-                    -- By content type
-                    movies INTEGER DEFAULT 0,
-                    tv_shows INTEGER DEFAULT 0,
-                    episodes INTEGER DEFAULT 0,
-                    music INTEGER DEFAULT 0,
-                    
-                    -- Special events
-                    library_scans INTEGER DEFAULT 0,
-                    mass_renames_caught INTEGER DEFAULT 0,  -- Bulk rename operations detected and suppressed
-                    
-                    -- Performance metrics
-                    avg_processing_time_ms REAL,
-                    queue_size_max INTEGER DEFAULT 0,
-                    
-                    -- Unique constraint on hour bucket to prevent duplicates
-                    UNIQUE(hour_bucket)
-                )
-            """)
+            self.logger.debug("Creating notification_stats table...")
+            try:
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS notification_stats (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        hour_bucket TEXT NOT NULL,  -- YYYY-MM-DD HH:00:00 for hourly aggregation
+                        day_bucket TEXT NOT NULL,   -- YYYY-MM-DD for daily aggregation
+                        
+                        -- Notification counts
+                        notifications_sent INTEGER DEFAULT 0,
+                        notifications_failed INTEGER DEFAULT 0,
+                        
+                        -- By type
+                        new_items INTEGER DEFAULT 0,
+                        upgraded_items INTEGER DEFAULT 0,
+                        deleted_items INTEGER DEFAULT 0,
+                        
+                        -- By content type
+                        movies INTEGER DEFAULT 0,
+                        tv_shows INTEGER DEFAULT 0,
+                        episodes INTEGER DEFAULT 0,
+                        music INTEGER DEFAULT 0,
+                        
+                        -- Special events
+                        library_scans INTEGER DEFAULT 0,
+                        mass_renames_caught INTEGER DEFAULT 0,  -- Bulk rename operations detected and suppressed
+                        
+                        -- Performance metrics
+                        avg_processing_time_ms REAL,
+                        queue_size_max INTEGER DEFAULT 0,
+                        
+                        -- Unique constraint on hour bucket to prevent duplicates
+                        UNIQUE(hour_bucket)
+                    )
+                """)
+                self.logger.info("notification_stats table created successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to create notification_stats table: {e}", exc_info=True)
+                raise
             
             # Create indexes for efficient querying
             await db.execute("""
@@ -345,6 +351,14 @@ class WebDatabaseManager:
             await db.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
             
             await db.commit()
+            
+            # Verify all tables were created
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in await cursor.fetchall()]
+            self.logger.info(f"Database tables present: {tables}")
+            
+            if 'notification_stats' not in tables:
+                self.logger.error("notification_stats table was not created!")
             
             # Initialize security settings if not exists
             cursor = await db.execute("SELECT COUNT(*) FROM security_settings")

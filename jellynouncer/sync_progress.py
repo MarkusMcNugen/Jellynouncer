@@ -329,7 +329,7 @@ class SyncProgressDisplay:
         if self.sync_type == "initial":
             # Red → Orange → Yellow → Green gradient (10 steps)
             if percent < 10:
-                r, g, b = 255, int(percent * 2.55), 0  # Red to Red-Orange
+                r, g, b = 255, 0, 0  # Red to Red-Orange
             elif percent < 20:
                 r, g, b = 255, int(25.5 + (percent - 10) * 2.55), 0  # Red-Orange
             elif percent < 30:

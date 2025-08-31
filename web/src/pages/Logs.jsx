@@ -56,14 +56,28 @@ const Logs = () => {
   
   // Parse and filter logs
   const { parsedLogs, stats } = useMemo(() => {
-    if (!logsResponse?.data?.logs) {
+    if (!logsResponse?.data) {
       return { parsedLogs: [], stats: {} }
     }
     
-    // Convert API response to raw log text
-    const logText = logsResponse.data.logs.map(log => 
-      `[${log.timestamp}][${log.level}][${log.component}] ${log.message}`
-    ).join('\n')
+    let logText = '';
+    
+    // Check if we have raw log content or parsed logs
+    if (typeof logsResponse.data === 'string') {
+      // Raw log text - use directly
+      logText = logsResponse.data;
+    } else if (logsResponse.data.content) {
+      // Raw content field
+      logText = logsResponse.data.content;
+    } else if (logsResponse.data.logs && Array.isArray(logsResponse.data.logs)) {
+      // Pre-parsed logs - reconstruct (this will lose multi-line formatting)
+      // This is a fallback and won't properly handle multi-line logs
+      logText = logsResponse.data.logs.map(log => 
+        `[${log.timestamp}][${log.level}][${log.component}] ${log.message}`
+      ).join('\n');
+      
+      console.warn('Using pre-parsed logs - multi-line entries may not display correctly');
+    }
     
     const parsed = parseLogText(logText)
     const filtered = filterLogs(parsed, { level, component, search })

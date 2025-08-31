@@ -1248,44 +1248,52 @@ class WebInterfaceService:
                 raise ValueError(f"Log file {query.file} not found in any standard location")
         
         logs = []
+        current_log = None
         
         try:
-            with open(log_path, 'r') as f:
-                # Read last N lines
-                lines = f.readlines()[-query.lines:]
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                # Read last N lines (but we need more to handle multi-line entries)
+                # Read extra lines to account for multi-line messages
+                lines = f.readlines()[-(query.lines * 3):]
+                
+                import re
+                log_pattern = re.compile(r'^\[([^\]]+)\]\[([^\]]+)\]\[([^\]]+)\]\s*(.*)')
                 
                 for line in lines:
-                    # Parse log line (format: [timestamp][level][component] message)
-                    # Example: [2025-08-25 05:34:10 UTC][INFO][jellynouncer] Log message
-                    import re
-                    match = re.match(r'\[([^\]]+)\]\[([^\]]+)\]\[([^\]]+)\]\s*(.*)', line.strip())
+                    # Check if this line starts a new log entry
+                    match = log_pattern.match(line)
                     
                     if match:
-                        log_entry = {
+                        # Save previous log entry if it exists and passes filters
+                        if current_log:
+                            # Apply filters
+                            if (not query.level or current_log["level"] == query.level) and \
+                               (not query.component or query.component in current_log["component"]) and \
+                               (not query.search or query.search.lower() in (current_log["message"] + current_log["component"]).lower()):
+                                logs.append(current_log)
+                        
+                        # Start new log entry
+                        current_log = {
                             "timestamp": match.group(1),
                             "level": match.group(2),
                             "component": match.group(3),
                             "message": match.group(4)
                         }
-                        
-                        # Apply filters
-                        if query.level and log_entry["level"] != query.level:
-                            continue
-                        if query.component and query.component not in log_entry["component"]:
-                            continue
-                        if query.search and query.search.lower() not in line.lower():
-                            continue
-                        
-                        logs.append(log_entry)
-                    else:
-                        # For lines that don't match the pattern, include as-is
-                        if not query.level and not query.component:
-                            logs.append({
-                                "timestamp": "",
-                                "level": "INFO",
-                                "component": "",
-                                "message": line.strip()
-                            })
+                    elif current_log:
+                        # This is a continuation line - append to current log's message
+                        # Preserve the newline for multi-line messages
+                        current_log["message"] += "\n" + line.rstrip()
+                    # If no current_log and line doesn't match pattern, skip it
+                
+                # Don't forget the last log entry
+                if current_log:
+                    if (not query.level or current_log["level"] == query.level) and \
+                       (not query.component or query.component in current_log["component"]) and \
+                       (not query.search or query.search.lower() in (current_log["message"] + current_log["component"]).lower()):
+                        logs.append(current_log)
+                
+                # Limit to requested number of entries (take from the end)
+                logs = logs[-query.lines:]
                 
         except Exception as e:
             self.logger.error(f"Failed to read logs: {e}")

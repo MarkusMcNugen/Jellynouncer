@@ -578,49 +578,104 @@ class WebDatabaseManager:
         """Get notification statistics for the dashboard"""
         from datetime import datetime, timezone, timedelta
         
-        now = datetime.now(timezone.utc)
-        start_time = now - timedelta(hours=hours)
-        
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
+        try:
+            now = datetime.now(timezone.utc)
+            start_time = now - timedelta(hours=hours)
             
-            # Get hourly stats for chart
-            cursor = await db.execute("""
-                SELECT 
-                    hour_bucket,
-                    notifications_sent,
-                    notifications_failed,
-                    new_items,
-                    upgraded_items,
-                    deleted_items
-                FROM notification_stats
-                WHERE timestamp >= ?
-                ORDER BY hour_bucket
-            """, (start_time.isoformat(),))
+            self.logger.debug(f"Fetching notification stats for last {hours} hours (since {start_time.isoformat()})")
             
-            hourly_stats = await cursor.fetchall()
-            
-            # Get totals for the period
-            cursor = await db.execute("""
-                SELECT 
-                    SUM(notifications_sent) as total_sent,
-                    SUM(notifications_failed) as total_failed,
-                    SUM(new_items) as total_new,
-                    SUM(upgraded_items) as total_upgraded,
-                    SUM(deleted_items) as total_deleted,
-                    SUM(movies) as total_movies,
-                    SUM(tv_shows) as total_tv,
-                    SUM(music) as total_music,
-                    SUM(mass_renames_caught) as total_renames_caught
-                FROM notification_stats
-                WHERE timestamp >= ?
-            """, (start_time.isoformat(),))
-            
-            totals = await cursor.fetchone()
-            
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row
+                
+                # Get hourly stats for chart
+                cursor = await db.execute("""
+                    SELECT 
+                        hour_bucket,
+                        notifications_sent,
+                        notifications_failed,
+                        new_items,
+                        upgraded_items,
+                        deleted_items
+                    FROM notification_stats
+                    WHERE timestamp >= ?
+                    ORDER BY hour_bucket
+                """, (start_time.isoformat(),))
+                
+                hourly_stats = await cursor.fetchall()
+                self.logger.debug(f"Found {len(hourly_stats)} hourly stat records")
+                
+                # Get totals for the period
+                cursor = await db.execute("""
+                    SELECT 
+                        COALESCE(SUM(notifications_sent), 0) as total_sent,
+                        COALESCE(SUM(notifications_failed), 0) as total_failed,
+                        COALESCE(SUM(new_items), 0) as total_new,
+                        COALESCE(SUM(upgraded_items), 0) as total_upgraded,
+                        COALESCE(SUM(deleted_items), 0) as total_deleted,
+                        COALESCE(SUM(movies), 0) as total_movies,
+                        COALESCE(SUM(tv_shows), 0) as total_tv,
+                        COALESCE(SUM(music), 0) as total_music,
+                        COALESCE(SUM(mass_renames_caught), 0) as total_renames_caught
+                    FROM notification_stats
+                    WHERE timestamp >= ?
+                """, (start_time.isoformat(),))
+                
+                totals = await cursor.fetchone()
+                
+                # Convert to dict with defaults for empty table
+                totals_dict = {}
+                if totals:
+                    for key in totals.keys():
+                        value = totals[key]
+                        totals_dict[key] = value if value is not None else 0
+                else:
+                    # Provide default values if no data
+                    totals_dict = {
+                        "total_sent": 0,
+                        "total_failed": 0,
+                        "total_new": 0,
+                        "total_upgraded": 0,
+                        "total_deleted": 0,
+                        "total_movies": 0,
+                        "total_tv": 0,
+                        "total_music": 0,
+                        "total_renames_caught": 0
+                    }
+                
+                # Convert hourly stats safely
+                hourly_list = []
+                for row in hourly_stats:
+                    row_dict = {}
+                    for key in row.keys():
+                        value = row[key]
+                        row_dict[key] = value if value is not None else 0
+                    hourly_list.append(row_dict)
+                
+                result = {
+                    "hourly": hourly_list,
+                    "totals": totals_dict,
+                    "period_hours": hours
+                }
+                
+                self.logger.debug(f"Returning notification stats: {len(hourly_list)} hourly records, totals: {totals_dict}")
+                return result
+                
+        except Exception as e:
+            self.logger.error(f"Error fetching notification stats: {e}", exc_info=True)
+            # Return safe defaults on error
             return {
-                "hourly": [dict(row) for row in hourly_stats],
-                "totals": dict(totals) if totals else {},
+                "hourly": [],
+                "totals": {
+                    "total_sent": 0,
+                    "total_failed": 0,
+                    "total_new": 0,
+                    "total_upgraded": 0,
+                    "total_deleted": 0,
+                    "total_movies": 0,
+                    "total_tv": 0,
+                    "total_music": 0,
+                    "total_renames_caught": 0
+                },
                 "period_hours": hours
             }
 
@@ -905,6 +960,8 @@ class WebInterfaceService:
         import psutil
         from datetime import datetime, timezone
         
+        self.logger.debug("Starting get_overview_stats...")
+        
         stats = {
             "total_items": 0,
             "items_today": 0,
@@ -977,8 +1034,10 @@ class WebInterfaceService:
             self.logger.warning(f"Could not get Jellyfin stats: {e}")
         
         # Get historical statistics from web database
+        self.logger.debug("Fetching historical notification stats...")
         try:
             historical_stats = await self.web_db.get_notification_stats(hours=24)
+            self.logger.debug(f"Historical stats retrieved: {len(historical_stats.get('hourly', []))} hourly records")
             stats["historical_stats"] = historical_stats
             
             # Update totals with historical data if available
@@ -989,8 +1048,11 @@ class WebInterfaceService:
                 new_items = totals.get("total_new") or 0
                 upgraded_items = totals.get("total_upgraded") or 0
                 stats["items_today"] = new_items + upgraded_items
+                self.logger.debug(f"Stats from historical data: total_items={stats['total_items']}, items_today={stats['items_today']}")
+            else:
+                self.logger.debug("No historical totals available, using defaults")
         except Exception as e:
-            self.logger.warning(f"Could not get historical stats: {e}")
+            self.logger.error(f"Error getting historical stats: {e}", exc_info=True)
             stats["historical_stats"] = {"hourly": [], "totals": {}, "period_hours": 24}
         
         # Get statistics from main database if webhook service is available
@@ -1031,6 +1093,7 @@ class WebInterfaceService:
             self.logger.debug("Running in standalone mode - limited statistics available")
             stats["system_health"]["webhook_service"] = "not available (standalone mode)"
         
+        self.logger.debug(f"Returning overview stats: total_items={stats.get('total_items', 0)}, items_today={stats.get('items_today', 0)}, has_historical={bool(stats.get('historical_stats'))}")
         return OverviewStats(**stats)
     
     async def get_config(self, include_sensitive: bool = False) -> Dict[str, Any]:

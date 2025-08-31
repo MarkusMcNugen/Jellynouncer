@@ -114,7 +114,7 @@ const Logs = () => {
     return (
       <div 
         style={style} 
-        className={`flex items-start gap-2 px-4 py-1 hover:bg-dark-elevated/50 transition-colors ${formatted.rowClassName}`}
+        className={`flex items-start gap-2 px-4 py-2 hover:bg-dark-elevated/50 transition-colors ${formatted.rowClassName}`}
       >
         {/* Timestamp */}
         <span className="text-xs text-dark-text-muted font-mono min-w-[180px] flex-shrink-0">
@@ -140,13 +140,34 @@ const Logs = () => {
         
         {/* Message - preserving leading spaces and proper overflow handling */}
         <span 
-          className="flex-1 text-sm font-mono text-dark-text-primary break-all whitespace-pre overflow-wrap-anywhere"
+          className="flex-1 text-sm font-mono text-dark-text-primary break-all whitespace-pre-wrap overflow-wrap-anywhere"
           style={{ wordBreak: 'break-word' }}
           dangerouslySetInnerHTML={{ 
-            __html: search ? log.message.replace(
-              new RegExp(`(${search})`, 'gi'), 
-              '<mark class="bg-yellow-400/30 text-yellow-200">$1</mark>'
-            ) : log.message 
+            __html: (() => {
+              // First escape HTML to prevent XSS
+              let processedMessage = log.message
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+              
+              // Then apply search highlighting if needed
+              if (search) {
+                processedMessage = processedMessage.replace(
+                  new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
+                  '<mark class="bg-yellow-400/30 text-yellow-200">$1</mark>'
+                );
+              }
+              
+              // Convert newlines to <br> tags for proper display
+              // Handle both Unix (\n) and Windows (\r\n) line endings
+              processedMessage = processedMessage.replace(/\r\n/g, '<br>');
+              processedMessage = processedMessage.replace(/\n/g, '<br>');
+              processedMessage = processedMessage.replace(/\r/g, '<br>');
+              
+              return processedMessage;
+            })()
           }}
         />
       </div>
@@ -333,7 +354,7 @@ const Logs = () => {
             ref={listRef}
             height={window.innerHeight - 200} // Adjust based on header height
             itemCount={parsedLogs.length}
-            itemSize={40} // Increased height for wrapped text
+            itemSize={60} // Increased height to accommodate multi-line messages
             width="100%"
             className="scrollbar-thin scrollbar-thumb-dark-border scrollbar-track-dark-surface"
             style={{ overflowX: 'hidden' }}

@@ -102,6 +102,152 @@ The service acts as a smart filter between Jellyfin's webhook events and Discord
 - **Rename Filtering**: Automatically detects and filters out file renames (same content, different path)
 - **Upgrade Detection**: Intelligently handles file upgrades by filtering deletion notifications when followed by additions
 
+#### Content Hash Algorithm
+
+Jellynouncer uses a sophisticated content hashing system to detect quality upgrades:
+
+**Algorithm**: Blake2b (32-byte digest) - Faster than SHA-256 with equal security
+
+**Fields Included in Hash**:
+- **Core**: `name`, `item_type`
+- **Video**: `video_height`, `video_width`, `video_codec`, `video_profile`, `video_range`, `video_framerate`, `video_bitrate`, `video_bitdepth`
+- **Audio**: `audio_codec`, `audio_channels`, `audio_bitrate`, `audio_samplerate`
+- **Subtitles**: `subtitle_count`, `subtitle_languages` (sorted), `subtitle_formats` (sorted)
+- **File**: `file_size`
+
+**Not Included** (intentionally excluded to prevent false positives):
+- Metadata fields (`overview`, `genres`, `studios`, `tags`)
+- External IDs (`imdb_id`, `tmdb_id`, `tvdb_id`)
+- File paths (allows moving/renaming without triggering upgrades)
+- Timestamps and dates
+
+This design ensures that only actual quality changes trigger upgrade notifications, while metadata updates and file reorganization are ignored.
+
+#### Customizable Change Detection Triggers
+
+Jellynouncer allows you to customize exactly which types of quality changes trigger upgrade notifications:
+
+**Available Triggers** (`watch_changes` configuration):
+
+| Trigger | Default | Description | Example Changes |
+|---------|---------|-------------|-----------------|
+| `resolution` | `true`* | Video resolution changes | 720p → 1080p → 4K |
+| `codec` | `true`* | Video codec improvements | H.264 → H.265/HEVC → AV1 |
+| `audio_codec` | `true`* | Audio codec upgrades | MP3 → AAC → FLAC, AC3 → DTS |
+| `audio_channels` | `true`* | Audio channel changes | Stereo (2.0) → 5.1 → 7.1 → Atmos |
+| `hdr_status` | `true`* | HDR format changes | SDR → HDR10 → HDR10+ → Dolby Vision |
+| `file_size` | `false` | Significant size changes (>10%) | Complete re-encodes |
+| `subtitles` | `true`* | Subtitle track/language changes | Added/removed subtitle tracks |
+
+*Default values when not explicitly configured. The system defaults to monitoring most quality improvements.
+
+**How Triggers Work**:
+1. When an existing item is updated, the content hash changes (indicating actual file changes)
+2. The system compares old vs new technical specifications
+3. Only enabled triggers are checked for changes
+4. If any enabled trigger detects a change, an "Upgraded" notification is sent
+5. The notification includes details about what changed
+
+**Configuration Examples**:
+
+```json
+{
+  "notifications": {
+    "watch_changes": {
+      "resolution": true,      // Always notify for resolution upgrades
+      "codec": true,          // Notify for codec improvements
+      "audio_codec": true,    // Important for audio enthusiasts
+      "audio_channels": true, // Track surround sound upgrades
+      "hdr_status": true,     // Critical for HDR displays
+      "file_size": false,     // Ignore size-only changes
+      "subtitles": false      // Don't care about subtitle changes
+    }
+  }
+}
+```
+
+**Use Cases**:
+- **Home Theater Enthusiast**: Enable all audio and HDR triggers for complete awareness
+- **Bandwidth Conscious**: Enable `codec` to track compression improvements
+- **Visual Quality Focus**: Enable `resolution` and `hdr_status`, disable audio triggers
+- **Minimal Notifications**: Enable only `resolution` for major upgrades
+
+**Important Notes**:
+- These triggers only apply to **upgrades** (when an existing item changes)
+- New items always trigger notifications (subject to other filters)
+- Triggers work in conjunction with the content hash - metadata-only changes never trigger upgrades
+- File size trigger requires >10% change to avoid minor fluctuations
+
+To configure via environment variables:
+```bash
+# Format: WATCH_CHANGES_<TRIGGER>=true/false
+WATCH_CHANGES_RESOLUTION=true
+WATCH_CHANGES_CODEC=true
+WATCH_CHANGES_AUDIO_CODEC=false
+WATCH_CHANGES_HDR_STATUS=true
+```
+
+#### Rename/Move Detection
+
+Jellynouncer uses two complementary methods to detect when files are renamed or moved without content changes:
+
+**Method 1: Content Hash Comparison**
+- Always active regardless of configuration
+- Since `file_path` is excluded from the hash, moving or renaming files doesn't change the hash
+- When a "new" item arrives with the same hash but different `item_id`, it's detected as a rename
+
+**Method 2: Deletion Queue Matching**
+- Used when Jellyfin sends both `ItemDeleted` and `ItemAdded` webhooks
+- Matches deletions with additions based on content hash
+- Provides additional rename detection for complex scenarios
+
+**Configuration**: `filter_renames` (default: `true`)
+- **When enabled**: Renames/moves are silently handled - database updated, no notifications sent
+- **When disabled**: Renames/moves trigger "New Item" notifications, allowing users to track file reorganization
+
+**Examples**:
+- Moving `/movies/Action/movie.mkv` to `/movies/SciFi/movie.mkv` → Same hash, detected as rename
+- Renaming `movie.1080p.mkv` to `movie.REMASTERED.1080p.mkv` → Same hash, detected as rename
+- Actual quality upgrade `movie.1080p.mkv` to `movie.4K.mkv` → Different hash, detected as upgrade
+
+To receive notifications for file moves/renames, set `filter_renames: false` in configuration or use environment variable `FILTER_RENAMES=false`.
+
+#### Upgrade Detection & Deletion Filtering
+
+Jellynouncer intelligently detects when files are being upgraded to prevent confusing notification pairs:
+
+**How It Works**:
+1. **Deletion Queue**: When an item is deleted, it's queued for 30 seconds instead of immediately notifying
+2. **Upgrade Detection**: If an `ItemAdded` arrives for the same item name within 30 seconds:
+   - **Same content hash** → Rename/move (filtered based on `filter_renames` setting)
+   - **Different content hash** → Quality upgrade (sends "Upgraded" notification only)
+   - **No matching add** → True deletion (sends "Deleted" notification after timeout)
+3. **Background Cleanup**: A task monitors the queue and processes true deletions after 30 seconds
+
+**Configuration**: `filter_deletes` (default: `true`)
+- **When enabled**: 
+  - Upgrades trigger only "Upgraded" notifications (no delete+add pair)
+  - True deletions are notified after 30-second delay
+  - Provides clean, meaningful notifications
+- **When disabled**: 
+  - All deletions trigger immediate notifications
+  - Upgrades result in "Deleted" followed by "Added" notifications
+  - Useful for tracking all library changes
+
+**Example Scenarios**:
+| Scenario | With Filtering | Without Filtering |
+|----------|---------------|-------------------|
+| **1080p → 4K Upgrade** | Single "Upgraded to 4K" notification | "Deleted" then "Added in 4K" notifications |
+| **File Deleted** | "Deleted" notification (after 30s) | "Deleted" notification (immediate) |
+| **File Renamed** | No notification (if `filter_renames=true`) | Based on `filter_renames` setting |
+
+**Queue Monitoring**: The deletion queue status is visible in:
+- Web interface dashboard
+- `/stats` API endpoint
+- Debug logs showing queue size and pending items
+
+To receive immediate deletion notifications without filtering, set `filter_deletes: false` in configuration or use environment variable `FILTER_DELETES=false`.
+
 </details>
 
 ### 🚀 Multi-Channel Discord Routing

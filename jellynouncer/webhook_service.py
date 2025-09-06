@@ -32,6 +32,7 @@ import aiosqlite
 from .config_models import AppConfig, ConfigurationValidator
 from .webhook_models import WebhookPayload
 from .media_models import MediaItem
+from .database_models import DatabaseItem
 from .database_manager import DatabaseManager
 from .jellyfin_api import JellyfinAPI
 from .discord_services import DiscordNotifier
@@ -500,7 +501,9 @@ class WebhookService:
                 if changes:
                     # This is an upgrade - update database with basic fields
                     self.logger.info(f"Quality upgrade detected for: {media_item.name}")
-                    await self.db.save_item(media_item)
+                    # Convert MediaItem to DatabaseItem before saving
+                    db_item = DatabaseItem.from_media_item(media_item)
+                    await self.db.save_item(db_item)
 
                     # Enrich with ALL type-specific fields for notification
                     enriched_item = await self.jellyfin.enrich_media_item_for_notification(
@@ -539,7 +542,9 @@ class WebhookService:
                 else:
                     # No significant changes - metadata only update
                     self.logger.debug(f"No significant changes for: {media_item.name}")
-                    await self.db.save_item(media_item)  # Update metadata
+                    # Convert MediaItem to DatabaseItem before saving
+                    db_item = DatabaseItem.from_media_item(media_item)
+                    await self.db.save_item(db_item)  # Update metadata
 
                     return {
                         "status": "success",
@@ -554,7 +559,9 @@ class WebhookService:
                 self.logger.info(f"New item detected: {media_item.name} ({media_item.item_type})")
 
                 # Save to database (basic fields only)
-                await self.db.save_item(media_item)
+                # Convert MediaItem to DatabaseItem before saving
+                db_item = DatabaseItem.from_media_item(media_item)
+                await self.db.save_item(db_item)
 
                 # Enrich media item with metadata before rendering templates
                 metadata = {}
@@ -1861,7 +1868,9 @@ class WebhookService:
         
         if is_rename:
             # Just update the database, don't send notification
-            await self.db.save_item(new_item)
+            # Convert MediaItem to DatabaseItem before saving
+            db_item = DatabaseItem.from_media_item(new_item)
+            await self.db.save_item(db_item)
             return {
                 "status": "filtered",
                 "action": "rename_filtered",
@@ -1930,7 +1939,9 @@ class WebhookService:
         if existing_item:
             changes = await self.change_detector.detect_changes(existing_item, media_item)
             if changes:
-                await self.db.save_item(media_item)
+                # Convert MediaItem to DatabaseItem before saving
+                db_item = DatabaseItem.from_media_item(media_item)
+                await self.db.save_item(db_item)
                 enriched_item = await self.jellyfin.enrich_media_item_for_notification(
                     media_item, item_data, retry_on_failure=True
                 )
@@ -1952,7 +1963,9 @@ class WebhookService:
                     "processing_time": round(time.time() - start_time, 3)
                 }
             else:
-                await self.db.save_item(media_item)
+                # Convert MediaItem to DatabaseItem before saving
+                db_item = DatabaseItem.from_media_item(media_item)
+                await self.db.save_item(db_item)
                 return {
                     "status": "success",
                     "action": "metadata_updated",
@@ -1961,7 +1974,9 @@ class WebhookService:
                     "processing_time": round(time.time() - start_time, 3)
                 }
         else:
-            await self.db.save_item(media_item)
+            # Convert MediaItem to DatabaseItem before saving
+            db_item = DatabaseItem.from_media_item(media_item)
+            await self.db.save_item(db_item)
             metadata = {}
             if self.metadata_service and self.metadata_service.enabled:
                 try:

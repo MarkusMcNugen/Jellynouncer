@@ -1,15 +1,14 @@
-.idea
-.venv
-.github/workflows/
 /.idea
-.idea/inspectionProfiles/profiles_settings.xml
-.idea/misc.xml
+/.venv
+/.github/workflows/
+/.idea
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/misc.xml
 CLAUDE.md
-.claude/settings.local.json
+/.claude/settings.local.json
 /__pycache__
 /.claude
 *.pyc
-.claude/settings.local.json
 *.pyc
 
 # Python cache in module directory

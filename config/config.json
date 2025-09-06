@@ -111,7 +111,8 @@
       "audio_codec": true,
       "audio_channels": true,
       "hdr_status": true,
-      "file_size": true
+      "file_size": false,
+      "subtitles": false
     },
     "colors": {
       "new_item": 65280,

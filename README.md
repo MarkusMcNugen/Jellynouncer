@@ -131,15 +131,13 @@ Jellynouncer allows you to customize exactly which types of quality changes trig
 
 | Trigger | Default | Description | Example Changes |
 |---------|---------|-------------|-----------------|
-| `resolution` | `true`* | Video resolution changes | 720p → 1080p → 4K |
-| `codec` | `true`* | Video codec improvements | H.264 → H.265/HEVC → AV1 |
-| `audio_codec` | `true`* | Audio codec upgrades | MP3 → AAC → FLAC, AC3 → DTS |
-| `audio_channels` | `true`* | Audio channel changes | Stereo (2.0) → 5.1 → 7.1 → Atmos |
-| `hdr_status` | `true`* | HDR format changes | SDR → HDR10 → HDR10+ → Dolby Vision |
+| `resolution` | `true` | Video resolution changes | 720p → 1080p → 4K |
+| `codec` | `true` | Video codec improvements | H.264 → H.265/HEVC → AV1 |
+| `audio_codec` | `true` | Audio codec upgrades | MP3 → AAC → FLAC, AC3 → DTS |
+| `audio_channels` | `true` | Audio channel changes | Stereo (2.0) → 5.1 → 7.1 → Atmos |
+| `hdr_status` | `true` | HDR format changes | SDR → HDR10 → HDR10+ → Dolby Vision |
 | `file_size` | `false` | Significant size changes (>10%) | Complete re-encodes |
-| `subtitles` | `true`* | Subtitle track/language changes | Added/removed subtitle tracks |
-
-*Default values when not explicitly configured. The system defaults to monitoring most quality improvements.
+| `subtitles` | `true` | Subtitle track/language changes | Added/removed subtitle tracks |
 
 **How Triggers Work**:
 1. When an existing item is updated, the content hash changes (indicating actual file changes)

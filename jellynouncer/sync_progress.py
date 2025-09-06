@@ -96,7 +96,7 @@ class SyncProgressDisplay:
     }
     
     def __init__(self, total_items: int, batch_size: int = 200, 
-                 sync_type: str = "initial", logger=None):
+                 sync_type: str = "initial", logger=None, console_only: bool = True):
         """
         Initialize the sync progress display.
         
@@ -105,11 +105,13 @@ class SyncProgressDisplay:
             batch_size: Size of each batch (for error coloring)
             sync_type: Type of sync ("initial" or "background")
             logger: Logger instance for output
+            console_only: If True, progress bars will only show in console, not in log files
         """
         self.total_items = total_items
         self.batch_size = batch_size
         self.sync_type = sync_type
         self.logger = logger
+        self.console_only = console_only
         
         # Timing and statistics
         self.start_time = time.time()
@@ -511,20 +513,46 @@ class SyncProgressDisplay:
             Display width in terminal columns
         """
         import re
+        import unicodedata
         
         # Remove ANSI color codes for width calculation
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
         text_no_ansi = ansi_escape.sub('', text)
         
-        # Count emoji characters (they typically display as 2 columns wide)
-        emoji_count = 0
+        # Calculate display width accounting for wide characters
+        width = 0
         for char in text_no_ansi:
-            # Simple check for emoji ranges
-            if ord(char) > 0x1F000:
-                emoji_count += 1
+            # Get East Asian Width property
+            char_width = unicodedata.east_asian_width(char)
+            
+            # Check if it's an emoji or wide character
+            # 'W' = Wide, 'F' = Fullwidth (both take 2 columns)
+            # Most emojis are 'W' or have Emoji property
+            if char_width in ('W', 'F'):
+                width += 2
+            # Check for emoji using Unicode category and common emoji ranges
+            elif ord(char) in range(0x1F300, 0x1F9FF):  # Emoticons, symbols, etc.
+                width += 2
+            elif ord(char) in range(0x2600, 0x27BF):  # Miscellaneous symbols (includes ⚡)
+                width += 2  
+            elif ord(char) in range(0x2300, 0x23FF):  # Technical symbols
+                width += 2
+            elif ord(char) in range(0x2700, 0x27BF):  # Dingbats
+                width += 2
+            elif ord(char) == 0x2705:  # ✅ Check mark
+                width += 2
+            elif ord(char) == 0x274C:  # ❌ Cross mark
+                width += 2
+            elif ord(char) in range(0x1F000, 0x1FFFF):  # Various emoji blocks
+                width += 2
+            # Zero-width characters (combining marks, etc.)
+            elif char_width in ('Mn', 'Me', 'Cf') or unicodedata.category(char) in ('Mn', 'Me', 'Cf'):
+                width += 0
+            else:
+                # Normal width character
+                width += 1
         
-        # Base length plus extra width for emojis
-        return len(text_no_ansi) + emoji_count
+        return width
     
     @staticmethod
     def _format_time(seconds: float) -> str:
@@ -579,19 +607,47 @@ class SyncProgressDisplay:
         
         return f"[{bar}{self.reset}] {percent_str} ({numbers_str})"
     
+    def _output(self, message: str, level: str = "info", force_log: bool = False):
+        """
+        Output helper that can write to console-only or to both console and log file.
+        
+        Args:
+            message: The message to output
+            level: Log level ("info", "debug", "warning", "error")
+            force_log: If True, always write to log file even in console_only mode
+        """
+        if self.console_only and not force_log:
+            # Write directly to console, bypassing file logger
+            print(message, flush=True)
+        else:
+            # Use logger which writes to both console and file
+            if self.logger:
+                log_func = getattr(self.logger, level, self.logger.info)
+                log_func(message)
+    
     def log_sync_start(self):
         """Log the sync start message with beautiful formatting."""
         icon = self.chars['icons']
         
+        # Box width configuration (total width including borders)
+        BOX_WIDTH = 68  # Total width of the box including borders
+        INNER_WIDTH = BOX_WIDTH - 4  # Subtract 2 for "│ " and 2 for " │"
+        
+        # Always log the start message to file for record keeping
         if self.unicode_level == 'full':
             # Beautiful Unicode box with rounded corners and emojis
             # Note: Emojis can be 2 characters wide in terminals
-            self.logger.info("╭────────────────────────────────────────────────────────────────╮")
+            border_line = "─" * (BOX_WIDTH - 2)  # -2 for corner characters
+            self._output(f"╭{border_line}╮", force_log=True)
+            
             title = f"{icon['start']} Library Sync Started ({self.sync_type.title()} Sync)"
-            # Account for emoji width (2 chars) when padding
-            padding_needed = 64 - len(title) + 1  # +1 for emoji width adjustment
-            self.logger.info(f"│ {title}{' ' * padding_needed}│")
-            self.logger.info("├────────────────────────────────────────────────────────────────┤")
+            # Use the display width calculator to get accurate width
+            title_display_width = self._calculate_display_width(title)
+            padding_needed = INNER_WIDTH - title_display_width
+            padding_needed = max(0, padding_needed)  # Ensure non-negative
+            self._output(f"│ {title}{' ' * padding_needed} │", force_log=True)
+            
+            self._output(f"├{border_line}┤", force_log=True)
             
             # Format stats with proper spacing
             stats_lines = [
@@ -602,28 +658,67 @@ class SyncProgressDisplay:
             
             for emoji, text in stats_lines:
                 line_content = f"{emoji}  {text}"  # Two spaces after emoji for visual balance
-                padding = 64 - len(line_content) + 1  # +1 for emoji width
-                self.logger.info(f"│ {line_content}{' ' * padding}│")
+                content_display_width = self._calculate_display_width(line_content)
+                padding = INNER_WIDTH - content_display_width
+                padding = max(0, padding)  # Ensure non-negative
+                self._output(f"│ {line_content}{' ' * padding} │", force_log=True)
             
-            self.logger.info("╰────────────────────────────────────────────────────────────────╯")
+            self._output(f"╰{border_line}╯", force_log=True)
         elif self.unicode_level == 'unicode':
-            # Unicode without emojis
-            self.logger.info("╭────────────────────────────────────────────────────────────╮")
-            self.logger.info(f"│ {icon['start']} Library Sync Started ({self.sync_type.title()} Sync)    │")
-            self.logger.info("├────────────────────────────────────────────────────────────┤")
-            self.logger.info(f"│ {icon['stats']} Total items: {self.total_items:,}".ljust(60) + "│")
-            self.logger.info(f"│ {icon['batch']} Batch size: {self.batch_size} (adaptive)".ljust(60) + "│")
-            self.logger.info(f"│ {icon['speed']} Mode: Streaming (producer-consumer)".ljust(60) + "│")
-            self.logger.info("╰────────────────────────────────────────────────────────────╯")
+            # Unicode without emojis  
+            border_line = "─" * (BOX_WIDTH - 2)
+            self._output(f"╭{border_line}╮", force_log=True)
+            
+            title = f"{icon['start']} Library Sync Started ({self.sync_type.title()} Sync)"
+            title_display_width = self._calculate_display_width(title)
+            padding_needed = INNER_WIDTH - title_display_width
+            padding_needed = max(0, padding_needed)
+            self._output(f"│ {title}{' ' * padding_needed} │", force_log=True)
+            
+            self._output(f"├{border_line}┤", force_log=True)
+            
+            # Format stats lines
+            stats_lines = [
+                f"{icon['stats']} Total items: {self.total_items:,}",
+                f"{icon['batch']} Batch size: {self.batch_size} (adaptive)",
+                f"{icon['speed']} Mode: Streaming (producer-consumer)"
+            ]
+            
+            for line in stats_lines:
+                line_display_width = self._calculate_display_width(line)
+                padding = INNER_WIDTH - line_display_width
+                padding = max(0, padding)
+                self._output(f"│ {line}{' ' * padding} │", force_log=True)
+            
+            self._output(f"╰{border_line}╯", force_log=True)
         else:
             # ASCII fallback
-            self.logger.info("+------------------------------------------------------------+")
-            self.logger.info(f"| {icon['start']} Library Sync Started ({self.sync_type.title()} Sync)    |")
-            self.logger.info("+------------------------------------------------------------+")
-            self.logger.info(f"| {icon['stats']} Total items: {self.total_items:,}".ljust(60) + "|")
-            self.logger.info(f"| {icon['batch']} Batch size: {self.batch_size} (adaptive)".ljust(60) + "|")
-            self.logger.info(f"| {icon['speed']} Mode: Streaming (producer-consumer)".ljust(60) + "|")
-            self.logger.info("+------------------------------------------------------------+")
+            # ASCII boxes are simpler - no multi-byte characters
+            border_line = "-" * (BOX_WIDTH - 2)
+            self._output(f"+{border_line}+", force_log=True)
+            
+            title = f"{icon['start']} Library Sync Started ({self.sync_type.title()} Sync)"
+            # For ASCII, icons are multi-char like "[>]" so we still need display width
+            title_display_width = self._calculate_display_width(title)
+            padding_needed = INNER_WIDTH - title_display_width
+            padding_needed = max(0, padding_needed)
+            self._output(f"| {title}{' ' * padding_needed} |", force_log=True)
+            
+            self._output(f"+{border_line}+", force_log=True)
+            
+            stats_lines = [
+                f"{icon['stats']} Total items: {self.total_items:,}",
+                f"{icon['batch']} Batch size: {self.batch_size} (adaptive)",
+                f"{icon['speed']} Mode: Streaming (producer-consumer)"
+            ]
+            
+            for line in stats_lines:
+                line_display_width = self._calculate_display_width(line)
+                padding = INNER_WIDTH - line_display_width
+                padding = max(0, padding)
+                self._output(f"| {line}{' ' * padding} |", force_log=True)
+            
+            self._output(f"+{border_line}+", force_log=True)
     
     def log_batch_progress(self, batch_num: int, items_in_batch: int, 
                           total_fetched: int, items_processed: int,
@@ -673,24 +768,29 @@ class SyncProgressDisplay:
         icon = self.chars['icons']
         tree = self.chars
         
-        # Log progress with colors and proper spacing
-        self.logger.info(f"Sync Progress: {progress_bar}")
+        # Progress bar to console only, summary info to log file
+        self._output(f"Sync Progress: {progress_bar}")
         
-        # Format lines with consistent spacing
+        # Log a simplified summary to the file (no progress bar)
+        if self.logger and not self.console_only:
+            # Only log key stats to file, not the visual progress bar
+            self.logger.info(f"Sync batch #{batch_num}: {total_fetched:,}/{self.total_items:,} items fetched, {items_processed:,} processed, {new_items} new, {updated_items} updated, {errors} errors")
+        
+        # Detailed stats to console only
         if self.unicode_level == 'full' or self.unicode_level == 'unicode':
             # Use proper tree characters with spacing
-            self.logger.debug(f"{tree['tree_mid']}  {icon['batch']}  Batch: #{batch_num} ({items_in_batch} items)  │  Total: {total_fetched:,}/{self.total_items:,}")
-            self.logger.debug(f"{tree['tree_mid']}  {icon['speed']}  Speed: {speed_color}{speed:.0f} items/sec{self.reset}")
-            self.logger.debug(f"{tree['tree_mid']}  {icon['time']}  ETA: {eta_color}~{SyncProgressDisplay._format_time(eta)}{self.reset}")
-            self.logger.debug(f"{tree['tree_mid']}  {icon['success']}  Processed: {items_processed:,}  │  {icon['error']}  Errors: {error_color}{errors}{self.reset}")
-            self.logger.debug(f"{tree['tree_end']}  {icon['new']}  New: {new_color}{new_items}{self.reset}  │  {icon['update']}  Updated: {update_color}{updated_items}{self.reset}")
+            self._output(f"{tree['tree_mid']}  {icon['batch']}  Batch: #{batch_num} ({items_in_batch} items)  │  Total: {total_fetched:,}/{self.total_items:,}", level="debug")
+            self._output(f"{tree['tree_mid']}  {icon['speed']}  Speed: {speed_color}{speed:.0f} items/sec{self.reset}", level="debug")
+            self._output(f"{tree['tree_mid']}  {icon['time']}  ETA: {eta_color}~{SyncProgressDisplay._format_time(eta)}{self.reset}", level="debug")
+            self._output(f"{tree['tree_mid']}  {icon['success']}  Processed: {items_processed:,}  │  {icon['error']}  Errors: {error_color}{errors}{self.reset}", level="debug")
+            self._output(f"{tree['tree_end']}  {icon['new']}  New: {new_color}{new_items}{self.reset}  │  {icon['update']}  Updated: {update_color}{updated_items}{self.reset}", level="debug")
         else:
             # ASCII fallback with simpler formatting
-            self.logger.debug(f"{tree['tree_mid']} {icon['batch']} Batch: #{batch_num} ({items_in_batch} items) | Total: {total_fetched:,}/{self.total_items:,}")
-            self.logger.debug(f"{tree['tree_mid']} {icon['speed']} Speed: {speed_color}{speed:.0f} items/sec{self.reset}")
-            self.logger.debug(f"{tree['tree_mid']} {icon['time']} ETA: {eta_color}~{SyncProgressDisplay._format_time(eta)}{self.reset}")
-            self.logger.debug(f"{tree['tree_mid']} {icon['success']} Processed: {items_processed:,} | {icon['error']} Errors: {error_color}{errors}{self.reset}")
-            self.logger.debug(f"{tree['tree_end']} {icon['new']} New: {new_color}{new_items}{self.reset} | {icon['update']} Updated: {update_color}{updated_items}{self.reset}")
+            self._output(f"{tree['tree_mid']} {icon['batch']} Batch: #{batch_num} ({items_in_batch} items) | Total: {total_fetched:,}/{self.total_items:,}", level="debug")
+            self._output(f"{tree['tree_mid']} {icon['speed']} Speed: {speed_color}{speed:.0f} items/sec{self.reset}", level="debug")
+            self._output(f"{tree['tree_mid']} {icon['time']} ETA: {eta_color}~{SyncProgressDisplay._format_time(eta)}{self.reset}", level="debug")
+            self._output(f"{tree['tree_mid']} {icon['success']} Processed: {items_processed:,} | {icon['error']} Errors: {error_color}{errors}{self.reset}", level="debug")
+            self._output(f"{tree['tree_end']} {icon['new']} New: {new_color}{new_items}{self.reset} | {icon['update']} Updated: {update_color}{updated_items}{self.reset}", level="debug")
     
     def log_sync_complete(self, success: bool = True):
         """
@@ -711,17 +811,25 @@ class SyncProgressDisplay:
             status_text = "Sync Failed"
             status_color = self._rgb_color(255, 0, 0)
         
+        # Box width configuration
+        BOX_WIDTH = 68  # Total width of the box including borders
+        INNER_WIDTH = BOX_WIDTH - 4  # Subtract 2 for "│ " and 2 for " │"
+        
+        # Always log completion to file for record keeping
         if self.unicode_level == 'full':
-            self.logger.info("╭────────────────────────────────────────────────────────────────╮")
+            border_line = "─" * (BOX_WIDTH - 2)
+            self._output(f"╭{border_line}╮", force_log=True)
             
             # Format status line with proper padding accounting for color codes
             status_line = f"{status_icon}  {status_text}: {self.items_processed:,} items in {SyncProgressDisplay._format_time(elapsed)}"
-            # Color codes don't take visual space, so calculate padding without them
-            visual_length = len(status_line) + 1  # +1 for emoji width
-            padding_needed = 62 - visual_length
-            self.logger.info(f"│ {status_color}{status_line}{self.reset}{' ' * padding_needed}│")
+            # Use display width calculator for accurate width (excludes ANSI codes)
+            status_display_width = self._calculate_display_width(status_line)
+            padding_needed = INNER_WIDTH - status_display_width
+            padding_needed = max(0, padding_needed)
+            # Note: color codes go around the content, not affecting padding
+            self._output(f"│ {status_color}{status_line}{self.reset}{' ' * padding_needed} │", force_log=True)
             
-            self.logger.info("├────────────────────────────────────────────────────────────────┤")
+            self._output(f"├{border_line}┤", force_log=True)
             
             # Format stats with consistent spacing
             stats_lines = [
@@ -732,26 +840,62 @@ class SyncProgressDisplay:
             
             for emoji, text in stats_lines:
                 line_content = f"{emoji}  {text}"  # Two spaces after emoji
-                padding = 64 - len(line_content) + 2  # +2 for emoji width
-                self.logger.info(f"│ {line_content}{' ' * padding}│")
+                content_display_width = self._calculate_display_width(line_content)
+                padding = INNER_WIDTH - content_display_width
+                padding = max(0, padding)
+                self._output(f"│ {line_content}{' ' * padding} │", force_log=True)
             
-            self.logger.info("╰────────────────────────────────────────────────────────────────╯")
+            self._output(f"╰{border_line}╯", force_log=True)
         elif self.unicode_level == 'unicode':
-            self.logger.info("╭────────────────────────────────────────────────────────────╮")
-            self.logger.info(f"│ {status_icon} {status_color}{status_text}: {self.items_processed:,} items in {SyncProgressDisplay._format_time(elapsed)}{self.reset}".ljust(60 + len(status_color) + len(self.reset)) + "│")
-            self.logger.info("├────────────────────────────────────────────────────────────┤")
-            self.logger.info(f"│ {icon['new']} New items: {self.new_items:,}".ljust(60) + "│")
-            self.logger.info(f"│ {icon['update']} Updated: {self.updated_items:,}".ljust(60) + "│")
-            self.logger.info(f"│ {icon['error']} Errors: {self.errors:,}".ljust(60) + "│")
-            self.logger.info("╰────────────────────────────────────────────────────────────╯")
+            border_line = "─" * (BOX_WIDTH - 2)
+            self._output(f"╭{border_line}╮", force_log=True)
+            
+            status_line = f"{status_icon} {status_text}: {self.items_processed:,} items in {SyncProgressDisplay._format_time(elapsed)}"
+            status_display_width = self._calculate_display_width(status_line)
+            padding_needed = INNER_WIDTH - status_display_width
+            padding_needed = max(0, padding_needed)
+            self._output(f"│ {status_color}{status_line}{self.reset}{' ' * padding_needed} │", force_log=True)
+            
+            self._output(f"├{border_line}┤", force_log=True)
+            
+            stats_lines = [
+                f"{icon['new']} New items: {self.new_items:,}",
+                f"{icon['update']} Updated: {self.updated_items:,}",
+                f"{icon['error']} Errors: {self.errors:,}"
+            ]
+            
+            for line in stats_lines:
+                line_display_width = self._calculate_display_width(line)
+                padding = INNER_WIDTH - line_display_width
+                padding = max(0, padding)
+                self._output(f"│ {line}{' ' * padding} │", force_log=True)
+            
+            self._output(f"╰{border_line}╯", force_log=True)
         else:
-            self.logger.info("+------------------------------------------------------------+")
-            self.logger.info(f"| {status_icon} {status_text}: {self.items_processed:,} items in {SyncProgressDisplay._format_time(elapsed)}".ljust(60) + "|")
-            self.logger.info("+------------------------------------------------------------+")
-            self.logger.info(f"| {icon['new']} New items: {self.new_items:,}".ljust(60) + "|")
-            self.logger.info(f"| {icon['update']} Updated: {self.updated_items:,}".ljust(60) + "|")
-            self.logger.info(f"| {icon['error']} Errors: {self.errors:,}".ljust(60) + "|")
-            self.logger.info("+------------------------------------------------------------+")
+            border_line = "-" * (BOX_WIDTH - 2)
+            self._output(f"+{border_line}+", force_log=True)
+            
+            status_line = f"{status_icon} {status_text}: {self.items_processed:,} items in {SyncProgressDisplay._format_time(elapsed)}"
+            status_display_width = self._calculate_display_width(status_line)
+            padding_needed = INNER_WIDTH - status_display_width
+            padding_needed = max(0, padding_needed)
+            self._output(f"| {status_line}{' ' * padding_needed} |", force_log=True)
+            
+            self._output(f"+{border_line}+", force_log=True)
+            
+            stats_lines = [
+                f"{icon['new']} New items: {self.new_items:,}",
+                f"{icon['update']} Updated: {self.updated_items:,}",
+                f"{icon['error']} Errors: {self.errors:,}"
+            ]
+            
+            for line in stats_lines:
+                line_display_width = self._calculate_display_width(line)
+                padding = INNER_WIDTH - line_display_width
+                padding = max(0, padding)
+                self._output(f"| {line}{' ' * padding} |", force_log=True)
+            
+            self._output(f"+{border_line}+", force_log=True)
 
 
 # Export the main class

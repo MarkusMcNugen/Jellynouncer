@@ -569,6 +569,8 @@ class DatabaseManager:
             - 'successful': Number of items saved successfully
             - 'failed': Number of items that failed to save
             - 'total': Total number of items processed
+            - 'new': Number of new items inserted
+            - 'updated': Number of existing items updated
 
         Example:
             ```python
@@ -577,6 +579,7 @@ class DatabaseManager:
             results = await db_manager.save_items_batch(items)
 
             logger.info(f"Batch save: {results['successful']}/{results['total']} succeeded")
+            logger.info(f"New: {results['new']}, Updated: {results['updated']}")
             ```
 
         Note:
@@ -584,10 +587,12 @@ class DatabaseManager:
             multiple times for large batches due to transaction overhead reduction.
         """
         if not items:
-            return {'successful': 0, 'failed': 0, 'total': 0}
+            return {'successful': 0, 'failed': 0, 'total': 0, 'new': 0, 'updated': 0}
 
         successful = 0
         failed = 0
+        new_items = 0
+        updated_items = 0
 
         try:
             async with aiosqlite.connect(self.db_path) as db:
@@ -595,6 +600,16 @@ class DatabaseManager:
 
                 # Begin transaction for all items with immediate lock
                 await db.execute("BEGIN IMMEDIATE")
+                
+                # First, check which items already exist in the database
+                # This is done efficiently in one query for the entire batch
+                item_ids = [item.item_id for item in items]
+                placeholders = ','.join('?' * len(item_ids))
+                cursor = await db.execute(
+                    f"SELECT item_id FROM media_items WHERE item_id IN ({placeholders})",
+                    item_ids
+                )
+                existing_ids = {row[0] for row in await cursor.fetchall()}
 
                 # Process items in chunks matching API batch size for consistency
                 # Uses same adaptive sizing as API calls for optimal performance
@@ -610,6 +625,12 @@ class DatabaseManager:
                         
                         for item in chunk:
                             try:
+                                # Track if this is a new or updated item
+                                if item.item_id not in existing_ids:
+                                    new_items += 1
+                                else:
+                                    updated_items += 1
+                                
                                 # Convert to dictionary and serialize JSON fields efficiently
                                 item_dict = asdict(item)
                                 
@@ -655,6 +676,12 @@ class DatabaseManager:
                         
                         for item in chunk:
                             try:
+                                # Track if this is a new or updated item (fallback path)
+                                if item.item_id not in existing_ids:
+                                    new_items += 1
+                                else:
+                                    updated_items += 1
+                                
                                 item_dict = asdict(item)
                                 json_fields = {'genres', 'studios', 'tags', 'artists', 'subtitle_languages', 'subtitle_formats'}
                                 for field in json_fields:
@@ -678,11 +705,13 @@ class DatabaseManager:
                 await db.commit()
                 self._connection_count -= 1
 
-            self.logger.debug(f"Batch save completed: {successful} successful, {failed} failed")
+            self.logger.debug(f"Batch save completed: {successful} successful ({new_items} new, {updated_items} updated), {failed} failed")
             return {
                 'successful': successful,
                 'failed': failed,
-                'total': len(items)
+                'total': len(items),
+                'new': new_items,
+                'updated': updated_items
             }
 
         except Exception as e:
@@ -690,7 +719,9 @@ class DatabaseManager:
             return {
                 'successful': 0,
                 'failed': len(items),
-                'total': len(items)
+                'total': len(items),
+                'new': 0,
+                'updated': 0
             }
 
     async def get_items_by_type(self, item_type: str, limit: Optional[int] = None) -> List[DatabaseItem]:

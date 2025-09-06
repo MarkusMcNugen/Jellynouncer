@@ -1235,7 +1235,8 @@ class WebhookService:
                                 total_items=total_count,
                                 batch_size=len(batch_items),
                                 sync_type=sync_type,
-                                logger=self.logger
+                                logger=self.logger,
+                                console_only=True  # Progress bars only in console, not log files
                             )
                             progress_display.log_sync_start()
                         

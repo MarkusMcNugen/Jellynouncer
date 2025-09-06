@@ -19,7 +19,6 @@ jellynouncer/*.pyo
 web/PERFORMANCE_OPTIMIZATIONS.md
 web/IMPLEMENTATION_GUIDE.md
 /web/node_modules
-/web/dist/assets
 nul
 
 # Environment files
@@ -33,6 +32,8 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+/tests
+/tests-examples
 /test-web-content.js
 /tests/example.spec.js
 /test_config.png
@@ -81,3 +82,21 @@ node_modules/
 /logs-overlap-actual.png
 /templates-editor-actual.png
 /tests/test-actual-issues.spec.js
+/test_web_debug.py
+/test-web-ui.spec.js
+/test_error.png
+/test_web_static.py
+/test_web_ui.py
+/web/dist/assets/charts-DGSoospa.js
+/web/dist/assets/charts-DGSoospa.js.map
+/web/dist/assets/editor-Cp_uRs8j.js
+/web/dist/assets/editor-Cp_uRs8j.js.map
+/web/dist/assets/fa-brands-400-DFY6gyJh.woff2
+/web/dist/assets/fa-regular-400-DdcaUAxu.woff2
+/web/dist/assets/fa-solid-900-BQpGBb1f.woff2
+/web/dist/assets/fa-v4compatibility-BHaDpj3C.woff2
+/web/dist/assets/index-CeBz7YVo.js
+/web/dist/assets/index-CeBz7YVo.js.map
+/web/dist/assets/index-D1do9DX_.css
+/web/dist/assets/vendor-D5cC_aag.js
+/web/dist/assets/vendor-D5cC_aag.js.map

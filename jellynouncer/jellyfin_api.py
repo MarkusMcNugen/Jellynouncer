@@ -496,7 +496,7 @@ class JellyfinAPI:
             
             # Get server info
             try:
-                server_info = self.client.jellyfin.get_server_info()
+                server_info = self.client.jellyfin.get_system_info()
                 if server_info:
                     stats['server_name'] = server_info.get('ServerName', 'Unknown')
                     stats['server_version'] = server_info.get('Version', 'Unknown')
@@ -525,7 +525,7 @@ class JellyfinAPI:
             
             # Get library statistics
             try:
-                libraries = self.client.jellyfin.get_user_views(self.config.user_id)
+                libraries = self.client.jellyfin.get_views()
                 library_stats = {}
                 total_items = 0
                 movie_count = 0

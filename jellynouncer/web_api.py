@@ -1254,7 +1254,10 @@ class WebInterfaceService:
                 stats["synced_items"] = {
                     "total": db_stats.get("total_items", 0),
                     "by_type": db_stats.get("item_counts", {}),
-                    "database_size_mb": db_stats.get("db_size_mb", 0)
+                    "database_size_mb": db_stats.get("db_size_mb", 0),
+                    "last_sync_time": db_stats.get("last_sync_time"),
+                    "sync_type": db_stats.get("sync_type"),
+                    "recent_additions": db_stats.get("recent_additions", 0)
                 }
                 
                 # Also update legacy fields for compatibility

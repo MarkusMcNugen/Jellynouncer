@@ -902,6 +902,22 @@ class DatabaseManager:
                 row = await cursor.fetchone()
                 stats['recent_additions'] = row['count'] if row else 0
 
+                # Get sync status information
+                cursor = await db.execute("""
+                                          SELECT last_sync_time, sync_type, timestamp
+                                          FROM sync_status
+                                          WHERE id = 1
+                                          """)
+                row = await cursor.fetchone()
+                if row:
+                    stats['last_sync_time'] = row['last_sync_time']
+                    stats['sync_type'] = row['sync_type']
+                    stats['sync_timestamp'] = row['timestamp']
+                else:
+                    stats['last_sync_time'] = None
+                    stats['sync_type'] = None
+                    stats['sync_timestamp'] = None
+
                 self._connection_count -= 1
                 return stats
 

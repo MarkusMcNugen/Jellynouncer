@@ -536,7 +536,12 @@ const Overview = () => {
                     {formatNumber(stats?.synced_items?.total || 0)}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Database: {stats?.synced_items?.database_size_mb || 0} MB
+                    Database: {(stats?.synced_items?.database_size_mb || 0).toFixed(1)} MB
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Last sync: {stats?.synced_items?.last_sync_time ? 
+                      new Date(stats.synced_items.last_sync_time).toLocaleString() : 
+                      'Never synced'}
                   </p>
                   <div className="mt-3">
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -554,6 +559,11 @@ const Overview = () => {
                       {Math.round(
                         ((stats?.synced_items?.total || 0) / Math.max(stats?.jellyfin_stats?.total_items || 1, 1)) * 100
                       )}% synced
+                      {stats?.synced_items?.recent_additions > 0 && (
+                        <span className="ml-2 text-green-500">
+                          (+{stats.synced_items.recent_additions} today)
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>

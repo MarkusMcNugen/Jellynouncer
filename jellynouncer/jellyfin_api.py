@@ -545,7 +545,6 @@ class JellyfinAPI:
                         # Get item count for this library
                         try:
                             lib_items = self.client.jellyfin.user_items(
-                                user_id=self.config.user_id,
                                 params={
                                     'ParentId': lib_id,
                                     'Recursive': True,
@@ -569,11 +568,9 @@ class JellyfinAPI:
                             elif lib_type == 'tvshows':
                                 # Get series and episode counts separately
                                 series_items = self.client.jellyfin.user_items(
-                                    user_id=self.config.user_id,
                                     params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Series'}
                                 )
                                 episode_items = self.client.jellyfin.user_items(
-                                    user_id=self.config.user_id,
                                     params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Episode'}
                                 )
                                 series_count += series_items.get('TotalRecordCount', 0) if series_items else 0
@@ -581,7 +578,6 @@ class JellyfinAPI:
                             elif lib_type == 'music':
                                 music_count += item_count
                                 album_items = self.client.jellyfin.user_items(
-                                    user_id=self.config.user_id,
                                     params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'MusicAlbum'}
                                 )
                                 music_album_count += album_items.get('TotalRecordCount', 0) if album_items else 0

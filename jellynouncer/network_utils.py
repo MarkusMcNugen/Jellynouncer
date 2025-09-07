@@ -899,6 +899,11 @@ def log_jellynouncer_startup(
     if logger is None:
         logger = logging.getLogger("jellynouncer")
 
+    # Skip banner in subprocesses to avoid duplicate logging
+    if os.environ.get('JELLYNOUNCER_SUBPROCESS'):
+        logger.debug(f"Skipping startup banner in {os.environ.get('JELLYNOUNCER_SUBPROCESS')} subprocess")
+        return
+
     detector = NetworkDetector(logger=logger)
 
     # Log the enhanced startup message (service -> app)

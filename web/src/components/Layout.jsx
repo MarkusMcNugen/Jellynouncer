@@ -7,6 +7,7 @@ import AuthSetup from './AuthSetup';
 import PasswordReset from './PasswordReset';
 import { Icon, IconDuotone, IconLight } from './FontAwesomeIcon';
 import logger from '../services/logger';
+import packageJson from '../../../package.json';
 
 const Layout = () => {
   logger.info('[Layout] Component initialization started');
@@ -280,7 +281,7 @@ const Layout = () => {
                   © 2024 Jellynouncer - Made with ☕ by Mark Newton
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Version 2.0.0
+                  Version {packageJson.version || '1.0.0'}
                 </p>
               </div>
               <div className="flex items-center space-x-4">

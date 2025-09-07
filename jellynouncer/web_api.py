@@ -54,11 +54,36 @@ import bcrypt
 # Import Jellynouncer modules
 from jellynouncer.config_models import ConfigurationValidator
 from jellynouncer.utils import get_web_logger, setup_web_logging, setup_logging, get_logger
-from jellynouncer.webhook_service import WebhookService
-from jellynouncer.jellyfin_api import JellyfinAPI
-from jellynouncer.database_manager import DatabaseManager
+
+# Log early to catch import issues
+early_logger = get_web_logger("jellynouncer.web_api.imports")
+early_logger.debug("Starting Jellynouncer module imports...")
+
+try:
+    from jellynouncer.webhook_service import WebhookService
+    early_logger.debug("WebhookService imported successfully")
+except ImportError as e:
+    early_logger.error(f"Failed to import WebhookService: {e}")
+    WebhookService = None
+
+try:
+    from jellynouncer.jellyfin_api import JellyfinAPI
+    early_logger.debug("JellyfinAPI imported successfully")
+except ImportError as e:
+    early_logger.error(f"Failed to import JellyfinAPI: {e}")
+    JellyfinAPI = None
+
+try:
+    from jellynouncer.database_manager import DatabaseManager
+    early_logger.debug("DatabaseManager imported successfully")
+except ImportError as e:
+    early_logger.error(f"Failed to import DatabaseManager: {e}")
+    DatabaseManager = None
+
 from jellynouncer.ssl_manager import SSLManager, setup_ssl_routes
 from jellynouncer.security_middleware import setup_security_middleware
+
+early_logger.debug("All imports completed")
 
 # Constants
 WEB_DB_PATH = "data/web_interface.db"
@@ -916,12 +941,43 @@ class WebInterfaceService:
             
             # Initialize main database connection
             self.logger.debug("Initializing main database connection...")
+            if self.config and self.config.database:
+                import os
+                db_path = self.config.database.path
+                self.logger.debug(f"Database config: path={db_path}")
+                self.logger.debug(f"Database file exists: {os.path.exists(db_path)}")
+                self.logger.debug(f"Database file absolute path: {os.path.abspath(db_path)}")
+                self.logger.debug(f"Current working directory: {os.getcwd()}")
+            else:
+                self.logger.debug(f"Database config: None")
             try:
-                self.db = DatabaseManager(self.config.database)
-                await self.db.initialize()
-                self.logger.info("Connected to main database successfully")
+                if not self.config.database:
+                    self.logger.warning("No database configuration found - running without database")
+                    self.db = None
+                else:
+                    self.logger.debug(f"Creating DatabaseManager with path: {self.config.database.path}")
+                    if DatabaseManager is None:
+                        self.logger.error("DatabaseManager class is None - import failed")
+                        self.db = None
+                    else:
+                        self.db = DatabaseManager(self.config.database)
+                        self.logger.debug("DatabaseManager created, calling initialize()...")
+                        await self.db.initialize()
+                        self.logger.info(f"Connected to main database successfully at {self.config.database.path}")
+                        
+                        # Test the connection
+                        test_stats = await self.db.get_stats()
+                        self.logger.debug(f"Database test query successful - total items: {test_stats.get('total_items', 0)}")
+            except ImportError as e:
+                self.logger.error(f"Failed to import DatabaseManager: {e}")
+                self.db = None
+            except FileNotFoundError as e:
+                self.logger.error(f"Database file not found: {e}")
+                self.db = None
             except Exception as e:
-                self.logger.warning(f"Main database initialization failed: {e} - some features will be limited")
+                self.logger.error(f"Main database initialization failed: {e}", exc_info=True)
+                self.logger.debug(f"Exception type: {type(e).__name__}")
+                self.logger.debug(f"Exception args: {e.args}")
                 self.db = None
                 
         except Exception as e:
@@ -1049,7 +1105,10 @@ class WebInterfaceService:
             "synced_items": {
                 "total": 0,
                 "by_type": {},
-                "database_size_mb": 0
+                "database_size_mb": 0,
+                "last_sync_time": None,
+                "sync_type": None,
+                "recent_additions": 0
             },
             "webhook_stats": {
                 "received": 0,
@@ -1242,13 +1301,19 @@ class WebInterfaceService:
             # Keep defaults that were already set
         
         # Get statistics from main database if webhook service is available
+        self.logger.debug(f"Checking database availability: self.db={self.db is not None}, webhook_service.db={hasattr(self.webhook_service, 'db') if self.webhook_service else False}")
+        
         if self.db or (self.webhook_service and hasattr(self.webhook_service, 'db') and self.webhook_service.db):
             try:
                 # Get comprehensive database stats
                 if self.db:
+                    self.logger.debug("Using web interface's own database connection")
                     db_stats = await self.db.get_stats()
+                    self.logger.debug(f"Database stats retrieved: {db_stats.keys() if db_stats else 'None'}")
                 else:
+                    self.logger.debug("Using webhook service's database connection")
                     db_stats = await self.webhook_service.db.get_stats()
+                    self.logger.debug(f"Database stats retrieved via webhook service: {db_stats.keys() if db_stats else 'None'}")
                 
                 # Store synced items information
                 stats["synced_items"] = {
@@ -1289,13 +1354,19 @@ class WebInterfaceService:
                         }
                 
             except Exception as e:
-                self.logger.error(f"Failed to get database statistics: {e}")
-                stats["system_health"]["database"] = "error"
+                self.logger.error(f"Failed to get database statistics: {e}", exc_info=True)
+                self.logger.debug(f"Database error type: {type(e).__name__}")
+                self.logger.debug(f"Database error details: {e.args}")
+                stats["system_health"]["database"] = f"error: {str(e)[:50]}"  # Include error snippet
                 # Keep default values for synced_items that were already set
         else:
             # Running in standalone mode without webhook service
-            self.logger.debug("Running in standalone mode - limited statistics available")
+            self.logger.warning("No database connection available")
+            self.logger.debug(f"Standalone mode details: self.db={self.db}, webhook_service={self.webhook_service is not None}")
+            if self.webhook_service:
+                self.logger.debug(f"Webhook service exists but has no db: {hasattr(self.webhook_service, 'db')}")
             stats["system_health"]["webhook_service"] = "not available (standalone mode)"
+            stats["system_health"]["database"] = "not connected"
             # Keep all default values that were already set
         
         self.logger.debug(f"Returning overview stats: total_items={stats.get('total_items', 0)}, items_today={stats.get('items_today', 0)}, has_historical={bool(stats.get('historical_stats'))}")

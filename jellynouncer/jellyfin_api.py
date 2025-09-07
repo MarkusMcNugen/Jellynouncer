@@ -494,9 +494,9 @@ class JellyfinAPI:
         try:
             stats = {}
             
-            # Get server info
+            # Get server info using async method with caching
             try:
-                server_info = self.client.jellyfin.get_system_info()
+                server_info = await self.get_system_info()
                 if server_info:
                     stats['server_name'] = server_info.get('ServerName', 'Unknown')
                     stats['server_version'] = server_info.get('Version', 'Unknown')
@@ -602,9 +602,9 @@ class JellyfinAPI:
             except Exception as e:
                 self.logger.warning(f"Could not get library stats: {e}")
             
-            # Get system info
+            # Get system info using async method with caching
             try:
-                system_info = self.client.jellyfin.get_system_info()
+                system_info = await self.get_system_info()
                 if system_info:
                     stats['system_info'] = {
                         'operating_system': system_info.get('OperatingSystem', 'Unknown'),

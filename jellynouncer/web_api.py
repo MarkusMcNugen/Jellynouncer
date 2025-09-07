@@ -867,6 +867,77 @@ async def check_auth_required(user: Optional[Dict[str, Any]] = Depends(get_curre
         return None
 
 
+async def check_webhook_key_auth(user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)) -> Optional[Dict[str, Any]]:
+    """
+    Special auth check for webhook API key management.
+    Allows access if:
+    1. User is authenticated (normal flow)
+    2. No admin users exist yet (setup flow)
+    3. Auth is disabled (no auth required)
+    """
+    logger.info(f"[WEBHOOK_KEY_AUTH] Starting webhook key auth check - user provided: {user is not None}")
+    
+    try:
+        # Check if web_service is initialized
+        if not web_service or not web_service.web_db:
+            logger.error("[WEBHOOK_KEY_AUTH] web_service or web_db is None!")
+            return None
+        
+        # Get security settings
+        settings = await web_service.web_db.get_security_settings()
+        auth_enabled = settings.get("auth_enabled", False)
+        
+        # If auth is disabled, allow access
+        if not auth_enabled:
+            logger.info("[WEBHOOK_KEY_AUTH] Auth disabled, allowing access")
+            return user  # Return user if provided, None otherwise
+        
+        # Check if any admin accounts exist
+        has_admin = False
+        try:
+            async with aiosqlite.connect(WEB_DB_PATH) as db:
+                cursor = await db.execute("SELECT COUNT(*) FROM users WHERE id = 1")
+                count = await cursor.fetchone()
+                has_admin = count and count[0] > 0
+        except Exception as e:
+            logger.error(f"[WEBHOOK_KEY_AUTH] Error checking for admin user: {e}")
+            has_admin = False
+        
+        # If no admin exists, allow access for initial setup
+        if not has_admin:
+            logger.info("[WEBHOOK_KEY_AUTH] No admin user exists, allowing access for setup")
+            return None  # Return None to indicate anonymous/setup access
+        
+        # Admin exists and auth is enabled, require authentication
+        if not user:
+            logger.warning("[WEBHOOK_KEY_AUTH] Authentication required but no valid user token provided")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        logger.info(f"[WEBHOOK_KEY_AUTH] User authenticated: {user.get('username', 'unknown')}")
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[WEBHOOK_KEY_AUTH] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
+        # On error, deny access for security (fail closed, not open)
+        # Only exception: if no database exists at all, allow initial setup
+        import os
+        if not os.path.exists(WEB_DB_PATH):
+            logger.warning("[WEBHOOK_KEY_AUTH] No database exists, allowing initial setup access")
+            return None
+        
+        # Database exists but error occurred - deny access for security
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication service temporarily unavailable"
+        )
+
+
 # ==================== Service Manager ====================
 
 class WebInterfaceService:
@@ -2122,9 +2193,9 @@ async def register(user_create: UserCreate, current_user: Optional[Dict] = Depen
 # ==================== Webhook API Key Management ====================
 
 @app.get("/api/webhook-keys")
-async def get_webhook_api_keys(current_user: Optional[Dict] = Depends(check_auth_required)):
+async def get_webhook_api_keys(current_user: Optional[Dict] = Depends(check_webhook_key_auth)):
     """Get all webhook API keys"""
-    logger.debug(f"Webhook API keys requested by user: {current_user.get('username') if current_user else 'anonymous'}")
+    logger.debug(f"Webhook API keys requested by user: {current_user.get('username') if current_user else 'anonymous/setup'}")
     
     try:
         keys = await web_service.web_db.get_webhook_api_keys()
@@ -2138,7 +2209,7 @@ async def get_webhook_api_keys(current_user: Optional[Dict] = Depends(check_auth
 @app.post("/api/webhook-keys")
 async def create_webhook_api_key(
     request: Dict[str, str],
-    current_user: Optional[Dict] = Depends(check_auth_required)
+    current_user: Optional[Dict] = Depends(check_webhook_key_auth)
 ):
     """Create a new webhook API key"""
     name = request.get("name", "").strip()
@@ -2155,7 +2226,7 @@ async def create_webhook_api_key(
         created_by = current_user.get("user_id") if current_user else None
         key_info = await web_service.web_db.create_webhook_api_key(name, description, created_by)
         
-        logger.info(f"Created webhook API key '{name}' (ID: {key_info['id']}) by user: {current_user.get('username') if current_user else 'system'}")
+        logger.info(f"Created webhook API key '{name}' (ID: {key_info['id']}) by user: {current_user.get('username') if current_user else 'setup/anonymous'}")
         
         # Log audit event if user is authenticated
         if current_user:
@@ -2181,7 +2252,7 @@ async def create_webhook_api_key(
 @app.delete("/api/webhook-keys/{key_id}")
 async def revoke_webhook_api_key(
     key_id: int,
-    current_user: Optional[Dict] = Depends(check_auth_required)
+    current_user: Optional[Dict] = Depends(check_webhook_key_auth)
 ):
     """Revoke a webhook API key"""
     try:

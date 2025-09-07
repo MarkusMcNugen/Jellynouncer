@@ -395,7 +395,13 @@ async def receive_webhook(request: Request):
         except Exception as auth_error:
             if webhook_service and webhook_service.logger:
                 webhook_service.logger.error(f"Error checking webhook auth: {str(auth_error)}")
-            # Don't block webhooks if auth check fails unexpectedly
+            # If auth is required but check failed, deny access (fail closed for security)
+            if settings.get("require_webhook_auth", False):
+                raise HTTPException(
+                    status_code=500,
+                    detail="Authentication service temporarily unavailable"
+                )
+            # Only allow through if auth is not required
             pass
 
     try:

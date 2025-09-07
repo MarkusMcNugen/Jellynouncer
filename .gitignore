@@ -104,3 +104,6 @@ node_modules/
 /web/jsconfig.json
 /web/test-overview.js
 /web/test-overview.mjs
+/web/web/overview-page.png
+/web/test-database-sync.mjs
+/web/test-interface.mjs

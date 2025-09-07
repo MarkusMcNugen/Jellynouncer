@@ -1131,12 +1131,17 @@ const Config = () => {
                   )}
                 </div>
                 
-                {/* Webhook API Keys Section */}
-                {config.web_interface.require_webhook_auth && (
-                  <div className="col-span-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <WebhookApiKeys />
-                  </div>
-                )}
+                {/* Webhook API Keys Section - Always show for independent setup */}
+                <div className="col-span-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  {!config.web_interface.require_webhook_auth && (
+                    <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                        <strong>Note:</strong> Webhook authentication is currently disabled. You can still create API keys below and enable authentication later.
+                      </p>
+                    </div>
+                  )}
+                  <WebhookApiKeys />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Host

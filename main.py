@@ -98,15 +98,31 @@ class ServiceLauncher:
             # Get logger after setup_logging
             logger = get_logger("launcher")
             
+            logger.info("Web service process started, importing web_api...")
+            
             # Import here to avoid circular imports
-            from jellynouncer import web_api
+            try:
+                from jellynouncer import web_api
+                logger.info("web_api imported successfully")
+            except Exception as import_error:
+                logger.error(f"Failed to import web_api: {import_error}")
+                import traceback
+                logger.error(traceback.format_exc())
+                raise
             
             logger.info("Starting Web Interface on port 1985...")
             
             # Check if SSL is configured
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            ssl_config = loop.run_until_complete(web_api.get_ssl_config())
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                ssl_config = loop.run_until_complete(web_api.get_ssl_config())
+                logger.info(f"SSL config retrieved: ssl_enabled={ssl_config.get('ssl_context') is not None}")
+            except Exception as ssl_error:
+                logger.error(f"Failed to get SSL config: {ssl_error}")
+                import traceback
+                logger.error(traceback.format_exc())
+                raise
             
             port = ssl_config.get("port", 1985)
             protocol = "https" if ssl_config.get("ssl_context") else "http"
@@ -115,6 +131,7 @@ class ServiceLauncher:
             
             # Run the web interface
             import uvicorn
+            logger.info(f"Starting uvicorn on port {port}...")
             uvicorn.run(
                 "jellynouncer.web_api:app",
                 host="0.0.0.0",
@@ -126,7 +143,9 @@ class ServiceLauncher:
             )
         except Exception as e:
             logger = get_logger("launcher")
-            logger.error(f"Web service failed: {e}")
+            logger.error(f"Web service failed with exception: {e}")
+            import traceback
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             sys.exit(1)
     
     def signal_handler(self, signum, frame):

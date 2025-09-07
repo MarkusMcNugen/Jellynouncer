@@ -145,8 +145,9 @@ const Overview = () => {
       case 'movie':
         return 'film';
       case 'series':
-      case 'episode':
         return 'tv';
+      case 'episode':
+        return 'clapperboard';  // More specific icon for episodes
       case 'music':
       case 'audio':
         return 'music';
@@ -419,7 +420,7 @@ const Overview = () => {
                       <span className="font-medium">{stats?.jellyfin_stats?.movie_count || 0}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span><Icon icon="tv" className="mr-1" size="xs" />Episodes</span>
+                      <span><Icon icon="clapperboard" className="mr-1" size="xs" />Episodes</span>
                       <span className="font-medium">{stats?.jellyfin_stats?.episode_count || 0}</span>
                     </div>
                     <div className="flex justify-between">
@@ -849,84 +850,148 @@ const Overview = () => {
           </div>
         </div>
 
-        {/* Recent Notifications Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              <Icon icon="bell" className="mr-2" />
-              Recent Notifications
-            </h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Time
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Title
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Event
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {recentNotifications.length > 0 ? (
-                  recentNotifications.map((notification, index) => (
-                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
-                        {new Date(notification.timestamp).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900 dark:text-gray-300">
-                          <Icon icon={getContentIcon(notification.type)} className="mr-2" size="sm" />
-                          <span>{notification.type}</span>
+        {/* SECTION 4: Recent Notifications */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <Icon icon="bell" className="mr-3 text-purple-600" size="lg" />
+            Recent Notifications
+          </h2>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div className="p-6">
+              {recentNotifications.length > 0 ? (
+                <div className="space-y-4">
+                  {recentNotifications.slice(0, 10).map((notification, index) => (
+                    <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          {/* Header row with icon, title, and badges */}
+                          <div className="flex items-start gap-3 mb-2">
+                            <div className="flex-shrink-0 mt-1">
+                              <Icon icon={getContentIcon(notification.type)} className="text-purple-600 dark:text-purple-400" size="lg" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                  {notification.title || notification.name || 'Unknown Item'}
+                                </h4>
+                                <span className={`
+                                  inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                  ${notification.event === 'new' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
+                                    notification.event === 'upgraded' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                    notification.event === 'deleted' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}
+                                `}>
+                                  {notification.event || notification.last_event || 'unknown'}
+                                </span>
+                                <span className={`
+                                  inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                  ${notification.status === 'sent' || notification.status === 'success' ? 
+                                    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
+                                    notification.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}
+                                `}>
+                                  <Icon icon={notification.status === 'sent' || notification.status === 'success' ? 'circle-check' : 
+                                              notification.status === 'failed' ? 'circle-xmark' : 'clock'} 
+                                        className="mr-1" size="xs" />
+                                  {notification.status || 'pending'}
+                                </span>
+                              </div>
+                              
+                              {/* Details */}
+                              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                                <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                  <Icon icon="clock" className="mr-2" size="sm" />
+                                  <span>{new Date(notification.timestamp).toLocaleString()}</span>
+                                </div>
+                                
+                                {notification.type && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="tag" className="mr-2" size="sm" />
+                                    <span className="capitalize">{notification.type}</span>
+                                  </div>
+                                )}
+                                
+                                {notification.library && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="folder" className="mr-2" size="sm" />
+                                    <span>{notification.library}</span>
+                                  </div>
+                                )}
+                                
+                                {notification.year && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="calendar" className="mr-2" size="sm" />
+                                    <span>{notification.year}</span>
+                                  </div>
+                                )}
+                                
+                                {notification.quality && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="display" className="mr-2" size="sm" />
+                                    <span>{notification.quality}</span>
+                                  </div>
+                                )}
+                                
+                                {notification.size && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="hard-drive" className="mr-2" size="sm" />
+                                    <span>{notification.size}</span>
+                                  </div>
+                                )}
+                                
+                                {notification.webhook_name && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="hashtag" className="mr-2" size="sm" />
+                                    <span>#{notification.webhook_name}</span>
+                                  </div>
+                                )}
+                                
+                                {notification.discord_message_id && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="message" className="mr-2" size="sm" />
+                                    <span>Message sent</span>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Overview if available */}
+                              {notification.overview && (
+                                <div className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+                                  <p className="line-clamp-2">{notification.overview}</p>
+                                </div>
+                              )}
+                              
+                              {/* Error message if failed */}
+                              {notification.status === 'failed' && notification.error_message && (
+                                <div className="mt-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded p-2">
+                                  <Icon icon="triangle-exclamation" className="mr-2" size="sm" />
+                                  {notification.error_message}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
-                        {notification.title || notification.name || 'Unknown'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
-                        <span className={`
-                          inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                          ${notification.event === 'new' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
-                            notification.event === 'upgraded' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                            notification.event === 'deleted' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}
-                        `}>
-                          {notification.event || notification.last_event || 'unknown'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
-                        <span className={`
-                          inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                          ${notification.status === 'sent' || notification.status === 'success' ? 
-                            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
-                            notification.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}
-                        `}>
-                          {notification.status || 'pending'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                      No recent notifications
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {recentNotifications.length > 10 && (
+                    <div className="text-center text-sm text-gray-500 dark:text-gray-400 pt-2">
+                      Showing 10 of {recentNotifications.length} recent notifications
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Icon icon="bell-slash" className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size="3x" />
+                  <p className="text-gray-500 dark:text-gray-400">No recent notifications</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                    Notifications will appear here as webhooks are processed
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

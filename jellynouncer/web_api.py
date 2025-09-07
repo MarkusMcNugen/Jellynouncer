@@ -2744,192 +2744,6 @@ async def generate_self_signed_cert(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==================== Static File Serving ====================
-# IMPORTANT: This MUST come after all API route definitions
-# to ensure API routes take precedence over the catch-all static route
-
-logger.debug("=" * 60)
-logger.debug("STATIC FILE SETUP - DEBUG MODE")
-logger.debug("=" * 60)
-
-# Determine the correct path for web dist
-if os.path.exists('/.dockerenv'):
-    # Running in Docker
-    web_dist_path = "/app/web/dist"
-    logger.debug("🐳 DOCKER ENVIRONMENT DETECTED")
-    logger.debug(f"Looking for static files at: {web_dist_path}")
-else:
-    # Running locally
-    web_dist_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "dist")
-    logger.debug("💻 LOCAL ENVIRONMENT DETECTED")
-    logger.debug(f"Looking for static files at: {web_dist_path}")
-
-# Check various possible paths (for debugging)
-possible_paths = [
-    web_dist_path,
-    "/app/web/dist",
-    os.path.join(os.path.dirname(__file__), "..", "web", "dist"),
-    os.path.join(os.getcwd(), "web", "dist"),
-    "web/dist"
-]
-
-logger.debug("Checking possible static file paths:")
-for path in possible_paths:
-    exists = os.path.exists(path) if path else False
-    abs_path = os.path.abspath(path) if path else "N/A"
-    logger.debug(f"  {path}: {'✓ EXISTS' if exists else '✗ NOT FOUND'} (abs: {abs_path})")
-
-# Check if the build exists
-if os.path.exists(web_dist_path):
-    logger.info(f"✓ Web interface build found at {web_dist_path}")
-    logger.debug(f"  Absolute path: {os.path.abspath(web_dist_path)}")
-    
-    # Debug: List ALL contents with details
-    try:
-        dist_contents = os.listdir(web_dist_path)
-        logger.debug(f"📁 Dist directory contains {len(dist_contents)} items:")
-        for item in dist_contents:
-            item_path = os.path.join(web_dist_path, item)
-            is_dir = os.path.isdir(item_path)
-            if is_dir:
-                try:
-                    sub_items = os.listdir(item_path)
-                    logger.debug(f"  📁 {item}/ ({len(sub_items)} items)")
-                    # If it's the assets directory, list its contents
-                    if item == "assets":
-                        for asset in sub_items[:10]:  # First 10 assets
-                            asset_size = os.path.getsize(os.path.join(item_path, asset))
-                            logger.debug(f"    📄 {asset} ({asset_size:,} bytes)")
-                except Exception as e:
-                    logger.error(f"    Error listing {item}: {e}")
-            else:
-                size = os.path.getsize(item_path)
-                logger.debug(f"  📄 {item} ({size:,} bytes)")
-        
-        # Specifically check for the assets that are failing
-        assets_path = os.path.join(web_dist_path, "assets")
-        if os.path.exists(assets_path):
-            logger.debug("✓ Assets directory exists")
-
-        else:
-            logger.error(f"✗ Assets directory NOT FOUND at {assets_path}")
-            
-    except Exception as e:
-        logger.error(f"Error listing directory contents: {e}", exc_info=True)
-    
-    # Mount the static files
-    logger.debug("Attempting to mount static files...")
-    
-    # Add explicit SPA route handlers BEFORE mounting static files
-    # These will serve index.html for the main SPA routes
-    from fastapi.responses import FileResponse
-    
-    index_path = os.path.join(web_dist_path, "index.html")
-    
-    @app.get("/config")
-    async def serve_config_spa():
-        """Serve index.html for /config SPA route"""
-        return FileResponse(index_path, media_type="text/html")
-    
-    @app.get("/templates")
-    async def serve_templates_spa():
-        """Serve index.html for /templates SPA route"""
-        return FileResponse(index_path, media_type="text/html")
-    
-    @app.get("/logs")
-    async def serve_logs_spa():
-        """Serve index.html for /logs SPA route"""
-        return FileResponse(index_path, media_type="text/html")
-    
-    @app.get("/overview")
-    async def serve_overview_spa():
-        """Serve index.html for /overview SPA route"""
-        return FileResponse(index_path, media_type="text/html")
-    
-    logger.debug("Added explicit SPA route handlers for /config, /templates, /logs, /overview")
-    
-    # The order matters: specific routes first, then catch-all
-    from fastapi.staticfiles import StaticFiles
-    
-    try:
-        # Mount the entire dist directory as the root
-        # The html=True option enables serving index.html for directory requests
-        # But we've added explicit handlers above for the main SPA routes
-        static_files = StaticFiles(directory=web_dist_path, html=True)
-        app.mount("/", static_files, name="static")
-        
-        logger.info("✓ Static files mounted successfully with SPA support")
-        
-        # Log all registered routes for debugging
-        logger.debug("Registered routes after static mount:")
-        for route in app.routes:
-            if hasattr(route, 'path'):
-                logger.debug(f"  {route.path} -> {route.__class__.__name__}")
-            else:
-                logger.debug(f"  {route} -> {route.__class__.__name__}")
-                
-    except Exception as e:
-        logger.error(f"✗ Failed to mount static files: {e}", exc_info=True)
-        
-else:
-    logger.error(f"✗ Web interface build NOT FOUND at {web_dist_path}")
-    logger.debug(f"  Absolute path checked: {os.path.abspath(web_dist_path)}")
-    logger.warning("The React frontend needs to be built first.")
-    logger.warning("Run 'npm install && npm run build' in the web directory")
-    
-    # List what IS in the parent directory
-    parent_dir = os.path.dirname(web_dist_path)
-    if os.path.exists(parent_dir):
-        logger.debug(f"Contents of parent directory {parent_dir}:")
-        try:
-            for item in os.listdir(parent_dir):
-                logger.debug(f"  - {item}")
-        except Exception as e:
-            logger.error(f"Could not list parent directory: {e}")
-    
-    # Add a fallback route for when the build doesn't exist
-    @app.get("/")
-    async def web_ui_not_built_root():
-        return JSONResponse(
-            status_code=503,
-            content={
-                "error": "Web interface not built",
-                "message": "The web interface needs to be built before it can be served.",
-                "instructions": [
-                    "1. Navigate to the 'web' directory",
-                    "2. Run 'npm install' to install dependencies",
-                    "3. Run 'npm run build' to build the production files",
-                    "4. Restart the Jellynouncer service"
-                ],
-                "api_status": "The API endpoints are still available at /api/*"
-            }
-        )
-    
-    # Note: When the build doesn't exist, the StaticFiles mount won't work,
-    # so we don't need explicit catch-all routes - the root handler above will catch everything
-
-
-# ==================== Main Entry Point ====================
-
-async def get_ssl_config():
-    """Get SSL configuration for server startup"""
-    ssl_manager = SSLManager(WEB_DB_PATH)
-    await ssl_manager.initialize()
-    settings = await ssl_manager.get_ssl_settings()
-    
-    if settings.get("ssl_enabled"):
-        context = ssl_manager.create_ssl_context(settings)
-        if context:
-            return {
-                "ssl_keyfile": None,  # Handled by context
-                "ssl_certfile": None,  # Handled by context
-                "ssl_context": context,
-                "port": settings.get("port", 9000)
-            }
-    
-    return {"port": 1985}
-
-
 # ==================== BACKUP ENDPOINTS ====================
 
 @app.get("/api/backup/status")
@@ -3166,6 +2980,195 @@ async def test_backup(current_user: Optional[Dict] = Depends(check_auth_required
     except Exception as e:
         logger.error(f"Backup system test failed: {e}")
         raise HTTPException(status_code=500, detail=f"Backup system test failed: {str(e)}")
+
+
+
+
+# ==================== Static File Serving ====================
+# IMPORTANT: This MUST come after all API route definitions
+# to ensure API routes take precedence over the catch-all static route
+
+logger.debug("=" * 60)
+logger.debug("STATIC FILE SETUP - DEBUG MODE")
+logger.debug("=" * 60)
+
+# Determine the correct path for web dist
+if os.path.exists('/.dockerenv'):
+    # Running in Docker
+    web_dist_path = "/app/web/dist"
+    logger.debug("🐳 DOCKER ENVIRONMENT DETECTED")
+    logger.debug(f"Looking for static files at: {web_dist_path}")
+else:
+    # Running locally
+    web_dist_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "dist")
+    logger.debug("💻 LOCAL ENVIRONMENT DETECTED")
+    logger.debug(f"Looking for static files at: {web_dist_path}")
+
+# Check various possible paths (for debugging)
+possible_paths = [
+    web_dist_path,
+    "/app/web/dist",
+    os.path.join(os.path.dirname(__file__), "..", "web", "dist"),
+    os.path.join(os.getcwd(), "web", "dist"),
+    "web/dist"
+]
+
+logger.debug("Checking possible static file paths:")
+for path in possible_paths:
+    exists = os.path.exists(path) if path else False
+    abs_path = os.path.abspath(path) if path else "N/A"
+    logger.debug(f"  {path}: {'✓ EXISTS' if exists else '✗ NOT FOUND'} (abs: {abs_path})")
+
+# Check if the build exists
+if os.path.exists(web_dist_path):
+    logger.info(f"✓ Web interface build found at {web_dist_path}")
+    logger.debug(f"  Absolute path: {os.path.abspath(web_dist_path)}")
+    
+    # Debug: List ALL contents with details
+    try:
+        dist_contents = os.listdir(web_dist_path)
+        logger.debug(f"📁 Dist directory contains {len(dist_contents)} items:")
+        for item in dist_contents:
+            item_path = os.path.join(web_dist_path, item)
+            is_dir = os.path.isdir(item_path)
+            if is_dir:
+                try:
+                    sub_items = os.listdir(item_path)
+                    logger.debug(f"  📁 {item}/ ({len(sub_items)} items)")
+                    # If it's the assets directory, list its contents
+                    if item == "assets":
+                        for asset in sub_items[:10]:  # First 10 assets
+                            asset_size = os.path.getsize(os.path.join(item_path, asset))
+                            logger.debug(f"    📄 {asset} ({asset_size:,} bytes)")
+                except Exception as e:
+                    logger.error(f"    Error listing {item}: {e}")
+            else:
+                size = os.path.getsize(item_path)
+                logger.debug(f"  📄 {item} ({size:,} bytes)")
+        
+        # Specifically check for the assets that are failing
+        assets_path = os.path.join(web_dist_path, "assets")
+        if os.path.exists(assets_path):
+            logger.debug("✓ Assets directory exists")
+
+        else:
+            logger.error(f"✗ Assets directory NOT FOUND at {assets_path}")
+            
+    except Exception as e:
+        logger.error(f"Error listing directory contents: {e}", exc_info=True)
+    
+    # Mount the static files
+    logger.debug("Attempting to mount static files...")
+    
+    # Add explicit SPA route handlers BEFORE mounting static files
+    # These will serve index.html for the main SPA routes
+    from fastapi.responses import FileResponse
+    
+    index_path = os.path.join(web_dist_path, "index.html")
+    
+    @app.get("/config")
+    async def serve_config_spa():
+        """Serve index.html for /config SPA route"""
+        return FileResponse(index_path, media_type="text/html")
+    
+    @app.get("/templates")
+    async def serve_templates_spa():
+        """Serve index.html for /templates SPA route"""
+        return FileResponse(index_path, media_type="text/html")
+    
+    @app.get("/logs")
+    async def serve_logs_spa():
+        """Serve index.html for /logs SPA route"""
+        return FileResponse(index_path, media_type="text/html")
+    
+    @app.get("/overview")
+    async def serve_overview_spa():
+        """Serve index.html for /overview SPA route"""
+        return FileResponse(index_path, media_type="text/html")
+    
+    logger.debug("Added explicit SPA route handlers for /config, /templates, /logs, /overview")
+    
+    # The order matters: specific routes first, then catch-all
+    from fastapi.staticfiles import StaticFiles
+    
+    try:
+        # Mount the entire dist directory as the root
+        # The html=True option enables serving index.html for directory requests
+        # But we've added explicit handlers above for the main SPA routes
+        static_files = StaticFiles(directory=web_dist_path, html=True)
+        app.mount("/", static_files, name="static")
+        
+        logger.info("✓ Static files mounted successfully with SPA support")
+        
+        # Log all registered routes for debugging
+        logger.debug("Registered routes after static mount:")
+        for route in app.routes:
+            if hasattr(route, 'path'):
+                logger.debug(f"  {route.path} -> {route.__class__.__name__}")
+            else:
+                logger.debug(f"  {route} -> {route.__class__.__name__}")
+                
+    except Exception as e:
+        logger.error(f"✗ Failed to mount static files: {e}", exc_info=True)
+        
+else:
+    logger.error(f"✗ Web interface build NOT FOUND at {web_dist_path}")
+    logger.debug(f"  Absolute path checked: {os.path.abspath(web_dist_path)}")
+    logger.warning("The React frontend needs to be built first.")
+    logger.warning("Run 'npm install && npm run build' in the web directory")
+    
+    # List what IS in the parent directory
+    parent_dir = os.path.dirname(web_dist_path)
+    if os.path.exists(parent_dir):
+        logger.debug(f"Contents of parent directory {parent_dir}:")
+        try:
+            for item in os.listdir(parent_dir):
+                logger.debug(f"  - {item}")
+        except Exception as e:
+            logger.error(f"Could not list parent directory: {e}")
+    
+    # Add a fallback route for when the build doesn't exist
+    @app.get("/")
+    async def web_ui_not_built_root():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "Web interface not built",
+                "message": "The web interface needs to be built before it can be served.",
+                "instructions": [
+                    "1. Navigate to the 'web' directory",
+                    "2. Run 'npm install' to install dependencies",
+                    "3. Run 'npm run build' to build the production files",
+                    "4. Restart the Jellynouncer service"
+                ],
+                "api_status": "The API endpoints are still available at /api/*"
+            }
+        )
+    
+    # Note: When the build doesn't exist, the StaticFiles mount won't work,
+    # so we don't need explicit catch-all routes - the root handler above will catch everything
+
+
+# ==================== Main Entry Point ====================
+
+async def get_ssl_config():
+    """Get SSL configuration for server startup"""
+    ssl_manager = SSLManager(WEB_DB_PATH)
+    await ssl_manager.initialize()
+    settings = await ssl_manager.get_ssl_settings()
+    
+    if settings.get("ssl_enabled"):
+        context = ssl_manager.create_ssl_context(settings)
+        if context:
+            return {
+                "ssl_keyfile": None,  # Handled by context
+                "ssl_certfile": None,  # Handled by context
+                "ssl_context": context,
+                "port": settings.get("port", 9000)
+            }
+    
+    return {"port": 1985}
+
 
 if __name__ == "__main__":
     import asyncio

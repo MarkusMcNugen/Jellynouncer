@@ -48,6 +48,10 @@ class BackupManager:
         """
         self.config = config or {}
         
+        # Log the config we received for debugging
+        logger.info(f"BackupManager initialized with config: {self.config}")
+        logger.info(f"Config has enabled: {self.config.get('enabled')}, schedule: {self.config.get('schedule')}")
+        
         # Default configuration
         self.backup_dir = Path(self.config.get("backup_dir", "data/backups"))
         self.max_backups = self.config.get("max_backups", 10)

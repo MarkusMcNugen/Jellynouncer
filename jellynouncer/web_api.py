@@ -2936,11 +2936,22 @@ async def get_ssl_config():
 async def get_backup_status(current_user: Optional[Dict] = Depends(check_auth_required)):
     """Get backup system status and configuration"""
     try:
+        # Debug logging
+        logger.debug(f"Getting backup status - backup_manager exists: {web_service.backup_manager is not None}")
+        logger.debug(f"Config object exists: {web_service.config is not None}")
+        if web_service.config:
+            logger.debug(f"Config has backup attr: {hasattr(web_service.config, 'backup')}")
+            if hasattr(web_service.config, 'backup'):
+                logger.debug(f"Backup config: {web_service.config.backup}")
+        
         if not web_service.backup_manager:
+            logger.warning("Backup manager not initialized - returning disabled status")
             return {"enabled": False, "message": "Backup system not initialized"}
         
         # Get current configuration
         config = web_service.config.backup.model_dump() if hasattr(web_service.config, 'backup') else {}
+        logger.debug(f"Backup config retrieved: {config}")
+        logger.info(f"Backup config details - enabled: {config.get('enabled')}, schedule: {config.get('schedule')}, backup_dir: {config.get('backup_dir')}")
         
         # Get backup statistics
         stats = await web_service.backup_manager.get_statistics()
@@ -2975,14 +2986,20 @@ async def get_backup_status(current_user: Optional[Dict] = Depends(check_auth_re
         
         estimated_size = db_size + config_size + template_size
         
-        return {
-            "enabled": config.get("enabled", True),
+        # The enabled field is IN the config, so we use it directly
+        response = {
+            "enabled": config.get("enabled", True),  # The enabled field from the backup config
             "config": config,
             "statistics": stats,
             "estimated_size": estimated_size,
             "estimated_size_mb": round(estimated_size / (1024 * 1024), 2),
             "next_backup": await web_service.backup_manager.get_next_backup_time() if web_service.backup_manager else None
         }
+        
+        logger.info(f"Returning backup status response: enabled={response['enabled']}, has_config={bool(response['config'])}")
+        logger.debug(f"Full response structure: {json.dumps(response, default=str)}")
+        
+        return response
     except Exception as e:
         logger.error(f"Failed to get backup status: {e}")
         raise HTTPException(status_code=500, detail=str(e))

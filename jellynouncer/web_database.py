@@ -714,6 +714,7 @@ class WebDatabaseManager:
     ):
         """Add a notification to the history"""
         import json
+
         from datetime import datetime
         
         if not self.initialized:

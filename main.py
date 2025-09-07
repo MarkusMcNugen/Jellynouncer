@@ -56,15 +56,19 @@ class ServiceLauncher:
     def start_webhook_service(self):
         """Start the webhook service in a separate process"""
         try:
-            # Setup logging for the webhook service process
+            # Set environment variable to indicate we're in a subprocess
+            os.environ['JELLYNOUNCER_SUBPROCESS'] = 'webhook'
+            
+            # Setup logging for the subprocess but skip the banner
             log_level = os.environ.get("LOG_LEVEL", "INFO")
             log_dir = os.environ.get("LOG_DIR", "/app/logs")
             if not os.path.exists('/.dockerenv'):
                 log_dir = "logs"
-            setup_logging(log_level, log_dir)
             
-            # Get logger after setup_logging
-            logger = get_logger("launcher")
+            # Import here since subprocess needs fresh import
+            from jellynouncer.utils import setup_logging, get_logger
+            setup_logging(log_level, log_dir)
+            logger = get_logger("launcher.webhook_subprocess")
             
             # Import here to avoid circular imports
             from jellynouncer import webhook_api
@@ -81,22 +85,35 @@ class ServiceLauncher:
                 access_log=False  # We have our own logging
             )
         except Exception as e:
-            logger = get_logger("launcher")
-            logger.error(f"Webhook service failed: {e}")
+            # Log to main log file for visibility
+            import traceback
+            try:
+                logger = get_logger("launcher.webhook")
+            except:
+                # Fallback if logger isn't available
+                print(f"Webhook service failed: {e}")
+                traceback.print_exc()
+            else:
+                logger.error(f"Webhook service failed: {e}")
+                logger.error(f"Full traceback:\n{traceback.format_exc()}")
             sys.exit(1)
     
     def start_web_service(self):
         """Start the web interface in a separate process"""
         try:
-            # Setup logging for the web service process
+            # Set environment variable to indicate we're in a subprocess
+            os.environ['JELLYNOUNCER_SUBPROCESS'] = 'web'
+            
+            # Setup logging for the subprocess but skip the banner
             log_level = os.environ.get("LOG_LEVEL", "INFO")
             log_dir = os.environ.get("LOG_DIR", "/app/logs")
             if not os.path.exists('/.dockerenv'):
                 log_dir = "logs"
-            setup_logging(log_level, log_dir)
             
-            # Get logger after setup_logging
-            logger = get_logger("launcher")
+            # Import here since subprocess needs fresh import
+            from jellynouncer.utils import setup_logging, setup_web_logging, get_logger, get_web_logger
+            setup_web_logging(log_level, log_dir)
+            logger = get_web_logger("launcher.web_subprocess")
             
             logger.info("Web service process started, importing web_api...")
             
@@ -142,10 +159,18 @@ class ServiceLauncher:
                 access_log=False  # We have our own logging
             )
         except Exception as e:
-            logger = get_logger("launcher")
-            logger.error(f"Web service failed with exception: {e}")
+            # Log to main log file for visibility  
             import traceback
-            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            try:
+                # Try to log to main log file
+                from jellynouncer.utils import get_logger
+                main_logger = get_logger("launcher.web")
+                main_logger.error(f"Web service failed: {e}")
+                main_logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            except:
+                # Fallback if logger isn't available
+                print(f"Web service failed: {e}")
+                traceback.print_exc()
             sys.exit(1)
     
     def signal_handler(self, signum, frame):

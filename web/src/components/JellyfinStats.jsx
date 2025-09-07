@@ -41,12 +41,12 @@ const JellyfinStats = ({ stats }) => {
 
   return (
     <div className="space-y-6">
-      {/* Server Status Card */}
+      {/* Server Status Card - Removed duplicate header */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-            <IconDuotone icon="server" className="mr-2 text-purple-500" />
-            Jellyfin Server
+            <IconDuotone icon="info-circle" className="mr-2 text-purple-500" />
+            Server Details
           </h2>
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(stats.server_status)}`}>
             {stats.server_status || 'Unknown'}

@@ -221,9 +221,9 @@ const Overview = () => {
       case 'movie':
         return 'film';
       case 'series':
-        return 'tv';
+        return 'tv-retro';  // Using tv-retro as tv may not be available in Font Awesome 7
       case 'episode':
-        return 'clapperboard';  // More specific icon for episodes
+        return 'video';  // Using video icon as clapperboard may not exist in FA 7.0
       case 'music':
       case 'audio':
         return 'music';
@@ -513,7 +513,7 @@ const Overview = () => {
                       <span className="font-medium">{stats?.jellyfin_stats?.movie_count || 0}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span><Icon icon="clapperboard" className="mr-1" size="xs" />Episodes</span>
+                      <span><Icon icon="video" className="mr-1" size="xs" />Episodes</span>
                       <span className="font-medium">{stats?.jellyfin_stats?.episode_count || 0}</span>
                     </div>
                     <div className="flex justify-between">
@@ -598,10 +598,7 @@ const Overview = () => {
             </div>
           </div>
 
-          {/* Detailed Jellyfin Stats Component */}
-          {stats && stats['jellyfin_stats'] && (
-            <JellyfinStats stats={stats['jellyfin_stats']} />
-          )}
+          {/* Detailed Jellyfin Stats Component - Removed to prevent duplicate section */}
         </div>
 
         {/* SECTION 2: Processing Pipeline */}

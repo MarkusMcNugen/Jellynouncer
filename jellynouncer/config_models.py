@@ -617,6 +617,9 @@ class BackupConfig(BaseModel):
         backup_templates (bool): Include templates in backups
         backup_ssl (bool): Include SSL certificates in backups
         backup_logs (bool): Include log files in backups
+        auto_backup_before_upgrade (bool): Automatically backup before upgrades
+        notification_on_success (bool): Send notification on successful backup
+        notification_on_failure (bool): Send notification on backup failure
     """
     model_config = ConfigDict(extra='forbid')
     
@@ -632,6 +635,9 @@ class BackupConfig(BaseModel):
     backup_templates: bool = Field(default=True, description="Include templates in backups")
     backup_ssl: bool = Field(default=False, description="Include SSL certificates in backups")
     backup_logs: bool = Field(default=False, description="Include logs in backups")
+    auto_backup_before_upgrade: bool = Field(default=True, description="Automatically backup before upgrades")
+    notification_on_success: bool = Field(default=False, description="Send notification on successful backup")
+    notification_on_failure: bool = Field(default=True, description="Send notification on backup failure")
     
     @field_validator('schedule')
     @classmethod

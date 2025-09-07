@@ -1,13 +1,11 @@
 /.idea
 /.venv
-/.idea
 /.idea/inspectionProfiles/profiles_settings.xml
 /.idea/misc.xml
 CLAUDE.md
 /.claude/settings.local.json
 /__pycache__
 /.claude
-*.pyc
 *.pyc
 
 # Python cache in module directory

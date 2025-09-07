@@ -893,13 +893,25 @@ class WebInterfaceService:
             # Initialize Jellyfin API client
             self.logger.debug("Initializing Jellyfin API client...")
             try:
+                # Log the config we're using
+                self.logger.debug(f"Jellyfin config - Server URL: {self.config.jellyfin.server_url if self.config.jellyfin else 'None'}")
+                self.logger.debug(f"Jellyfin config - Has API Key: {bool(self.config.jellyfin.api_key) if self.config.jellyfin else False}")
+                self.logger.debug(f"Jellyfin config - User ID: {self.config.jellyfin.user_id if self.config.jellyfin else 'None'}")
+                
                 self.jellyfin = JellyfinAPI(self.config.jellyfin)
                 if await self.jellyfin.connect():
                     self.logger.info("Connected to Jellyfin API successfully")
+                    # Try to get initial stats
+                    try:
+                        stats = await self.jellyfin.get_server_stats()
+                        self.logger.info(f"Initial Jellyfin stats retrieved: {stats.get('server_name', 'Unknown')} v{stats.get('server_version', 'Unknown')}")
+                    except Exception as stats_e:
+                        self.logger.warning(f"Could not retrieve initial stats: {stats_e}")
                 else:
                     self.logger.warning("Failed to connect to Jellyfin API - stats will be limited")
+                    self.jellyfin = None
             except Exception as e:
-                self.logger.warning(f"Jellyfin API initialization failed: {e} - stats will be limited")
+                self.logger.error(f"Jellyfin API initialization failed: {e}", exc_info=True)
                 self.jellyfin = None
             
             # Initialize main database connection
@@ -1097,22 +1109,29 @@ class WebInterfaceService:
         
         # Get Jellyfin stats from database
         try:
+            self.logger.debug(f"Attempting to get Jellyfin stats - db: {self.db is not None}, webhook_service.db: {self.webhook_service.db if self.webhook_service else None}")
             jellyfin_stats = None
             if self.db:
+                self.logger.debug("Getting stats from main database...")
                 jellyfin_stats = await self.db.get_latest_jellyfin_stats()
             elif self.webhook_service and self.webhook_service.db:
+                self.logger.debug("Getting stats from webhook service database...")
                 jellyfin_stats = await self.webhook_service.db.get_latest_jellyfin_stats()
+            
+            self.logger.debug(f"Retrieved jellyfin_stats: {bool(jellyfin_stats)}")
             
             if jellyfin_stats:
                 # Check if stats are stale (older than 1 hour)
                 if 'last_check' in jellyfin_stats:
                     last_check = datetime.fromisoformat(jellyfin_stats['last_check'])
                     if (datetime.now(timezone.utc) - last_check).total_seconds() > 3600:
+                        self.logger.debug("Stats are stale, triggering refresh...")
                         # Refresh stats in background
                         asyncio.create_task(self.refresh_jellyfin_stats())
                 
                 stats["jellyfin_stats"] = jellyfin_stats
             else:
+                self.logger.debug("No stats in database, triggering refresh and providing defaults...")
                 # No stats in database, trigger refresh and provide defaults
                 asyncio.create_task(self.refresh_jellyfin_stats())
                 # Provide default structure for Jellyfin stats
@@ -2079,7 +2098,7 @@ async def test_jellyfin_connection(
         )
         
         # Test connection by getting server info
-        server_info = await jellyfin.get_server_info()
+        server_info = await jellyfin.get_system_info()
         
         return {
             "success": True,

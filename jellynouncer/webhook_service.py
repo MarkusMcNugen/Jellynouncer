@@ -249,6 +249,16 @@ class WebhookService:
                 self.jellyfin = JellyfinAPI(self.config.jellyfin)
                 if await self.jellyfin.connect():
                     self.logger.info("Connected to Jellyfin API successfully")
+                    
+                    # Fetch and save initial Jellyfin stats for web UI
+                    try:
+                        self.logger.debug("Fetching initial Jellyfin server stats...")
+                        stats = await self.jellyfin.get_server_stats()
+                        if stats and self.db:
+                            await self.db.save_jellyfin_stats(stats)
+                            self.logger.info(f"Saved Jellyfin stats: {stats.get('server_name', 'Unknown')} v{stats.get('server_version', 'Unknown')}")
+                    except Exception as stats_e:
+                        self.logger.warning(f"Could not save initial Jellyfin stats: {stats_e}")
                 else:
                     self.logger.error("Failed to connect to Jellyfin API")
                     raise SystemExit("Cannot start without Jellyfin connection")
@@ -1067,8 +1077,28 @@ class WebhookService:
                             self._last_sync_time = time.time()
                         except Exception as e:
                             self.logger.error(f"Background sync failed: {e}")
+                
+                # Task 2: Update Jellyfin stats periodically (every 30 minutes)
+                stats_interval = 30 * 60  # 30 minutes in seconds
+                last_stats_update = getattr(self, '_last_stats_update', 0.0)
+                if not isinstance(last_stats_update, (int, float)):
+                    last_stats_update = 0.0
+                    self._last_stats_update = 0.0
+                
+                time_since_last_stats = time.time() - last_stats_update
+                
+                if time_since_last_stats > stats_interval:
+                    try:
+                        self.logger.debug("Updating Jellyfin server stats...")
+                        stats = await self.jellyfin.get_server_stats()
+                        if stats and self.db:
+                            await self.db.save_jellyfin_stats(stats)
+                            self.logger.debug(f"Updated Jellyfin stats: {stats.get('total_items', 0)} items")
+                            self._last_stats_update = time.time()
+                    except Exception as e:
+                        self.logger.warning(f"Failed to update Jellyfin stats: {e}")
 
-                # Task 2: Database maintenance (weekly) - WITH TYPE SAFETY
+                # Task 3: Database maintenance (weekly) - WITH TYPE SAFETY
                 vacuum_interval = 7 * 24 * 3600  # 1 week in seconds
 
                 # Ensure last_vacuum is always a float

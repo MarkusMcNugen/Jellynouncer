@@ -509,20 +509,37 @@ const Overview = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                  <Icon icon="download" className="text-blue-600 dark:text-blue-300" size="lg" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Webhooks Received
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {formatNumber(stats?.webhook_stats?.received || 0)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                    <Icon icon="download" className="text-blue-600 dark:text-blue-300" size="lg" />
+                  <div className="flex-shrink-0 p-3 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+                    <Icon icon="filter" className="text-yellow-600 dark:text-yellow-300" size="lg" />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      Webhooks Received
+                      Webhooks Filtered
                     </p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatNumber(stats?.webhook_stats?.received || 0)}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatNumber(stats?.webhook_stats?.processed || 0)} processed
+                      {formatNumber(
+                        (stats?.filtering_stats?.renames_filtered || 0) +
+                        (stats?.filtering_stats?.deletes_filtered || 0) +
+                        (stats?.filtering_stats?.mass_renames_caught || 0)
+                      )}
                     </p>
                   </div>
                 </div>
@@ -545,38 +562,15 @@ const Overview = () => {
                       stroke="currentColor"
                       strokeWidth="4"
                       fill="none"
-                      strokeDasharray={`${(stats?.webhook_stats?.processing_rate || 0) * 1.26} 126`}
-                      className="text-blue-600 dark:text-blue-400"
+                      strokeDasharray={`${Math.min(((stats?.filtering_stats?.renames_filtered || 0) + (stats?.filtering_stats?.deletes_filtered || 0) + (stats?.filtering_stats?.mass_renames_caught || 0)) / Math.max((stats?.webhook_stats?.received || 1), 1) * 100, 100) * 1.26} 126`}
+                      className="text-yellow-600 dark:text-yellow-400"
                     />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
                     <span className="text-xs font-bold text-gray-900 dark:text-white">
-                      {Math.round(stats?.webhook_stats?.processing_rate || 0)}%
+                      {Math.round(Math.min(((stats?.filtering_stats?.renames_filtered || 0) + (stats?.filtering_stats?.deletes_filtered || 0) + (stats?.filtering_stats?.mass_renames_caught || 0)) / Math.max((stats?.webhook_stats?.received || 1), 1) * 100, 100))}%
                     </span>
                   </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-              <div className="flex items-center">
-                <div className="flex-shrink-0 p-3 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
-                  <Icon icon="filter" className="text-yellow-600 dark:text-yellow-300" size="lg" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Events Filtered
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {formatNumber(
-                      (stats?.filtering_stats?.renames_filtered || 0) +
-                      (stats?.filtering_stats?.deletes_filtered || 0) +
-                      (stats?.filtering_stats?.mass_renames_caught || 0)
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Spam prevented
-                  </p>
                 </div>
               </div>
             </div>
@@ -593,9 +587,6 @@ const Overview = () => {
                     </p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                       {formatNumber(stats?.notification_stats?.sent || 0)}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatNumber(stats?.notification_stats?.failed || 0)} failed
                     </p>
                   </div>
                 </div>
@@ -632,23 +623,51 @@ const Overview = () => {
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-              <div className="flex items-center">
-                <div className="flex-shrink-0 p-3 bg-red-100 dark:bg-red-900 rounded-lg">
-                  <Icon icon="circle-xmark" className="text-red-600 dark:text-red-300" size="lg" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0 p-3 bg-red-100 dark:bg-red-900 rounded-lg">
+                    <Icon icon="circle-xmark" className="text-red-600 dark:text-red-300" size="lg" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      Failed Webhooks
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {formatNumber(
+                        (stats?.webhook_stats?.failed || 0) +
+                        (stats?.notification_stats?.failed || 0)
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Failed Events
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {formatNumber(
-                      (stats?.webhook_stats?.failed || 0) +
-                      (stats?.notification_stats?.failed || 0)
-                    )}
-                  </p>
-                  <p className="text-xs text-red-600 dark:text-red-400">
-                    Needs attention
-                  </p>
+                {/* Circular progress indicator - inverted to show failure rate */}
+                <div className="relative">
+                  <svg className="w-12 h-12 transform -rotate-90">
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                      className="text-gray-200 dark:text-gray-700"
+                    />
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                      strokeDasharray={`${Math.min(((stats?.webhook_stats?.failed || 0) + (stats?.notification_stats?.failed || 0)) / Math.max((stats?.webhook_stats?.received || 1), 1) * 100, 100) * 1.26} 126`}
+                      className="text-red-600 dark:text-red-400"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white">
+                      {Math.round(Math.min(((stats?.webhook_stats?.failed || 0) + (stats?.notification_stats?.failed || 0)) / Math.max((stats?.webhook_stats?.received || 1), 1) * 100, 100))}%
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

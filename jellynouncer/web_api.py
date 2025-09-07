@@ -1371,11 +1371,11 @@ async def lifespan(app_instance: FastAPI):
     if not os.path.exists('/.dockerenv'):
         log_dir = "logs"
     
-    setup_logging(log_level, log_dir)
+    setup_web_logging(log_level, log_dir)
     
-    # Re-get the logger to ensure it has the colored formatter
+    # Re-get the logger to ensure it has the colored formatter for web
     global logger
-    logger = get_logger("jellynouncer.web_api")
+    logger = get_web_logger("jellynouncer.web_api")
     
     # Startup
     logger.info("=" * 60)
@@ -2107,10 +2107,11 @@ async def get_log_files(current_user: Optional[Dict] = Depends(check_auth_requir
             else:
                 return {"files": []}
         
-        # Get all .log files in the directory
+        # Get all .log files in the directory, including rotated files
         log_files = []
-        for file in log_path.glob("*.log"):
-            if file.is_file():
+        # Match .log files and rotated files like .log.1, .log.2, etc.
+        for file in log_path.iterdir():
+            if file.is_file() and (file.suffix == '.log' or (file.name.endswith('.log') or '.log.' in file.name)):
                 # Get file size and last modified time
                 stat = file.stat()
                 log_files.append({
@@ -2120,8 +2121,22 @@ async def get_log_files(current_user: Optional[Dict] = Depends(check_auth_requir
                     "size_readable": f"{stat.st_size / 1024 / 1024:.2f} MB" if stat.st_size > 1024 * 1024 else f"{stat.st_size / 1024:.2f} KB"
                 })
         
-        # Sort by modified time (most recent first)
-        log_files.sort(key=lambda x: x["modified"], reverse=True)
+        # Sort log files: main logs first, then rotated by number
+        def sort_key(file_info):
+            name = file_info["name"]
+            # Check if it's a rotated file
+            if '.log.' in name:
+                # Extract the rotation number
+                try:
+                    base, num = name.rsplit('.', 1)
+                    return (base, int(num))
+                except:
+                    return (name, 0)
+            else:
+                # Main log file comes first
+                return (name, -1)
+        
+        log_files.sort(key=sort_key)
         
         return {"files": log_files}
         

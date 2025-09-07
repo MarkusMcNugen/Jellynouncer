@@ -55,7 +55,8 @@ export const configDescriptions = {
       audio_codec: "Notify when audio codec changes (AAC → DTS → TrueHD).",
       audio_channels: "Notify when audio channels increase (Stereo → 5.1 → 7.1).",
       hdr_status: "Notify when HDR is added (SDR → HDR10 → Dolby Vision).",
-      file_size: "Notify when file size changes significantly."
+      file_size: "Notify when file size changes significantly.",
+      subtitles: "Notify when subtitle tracks are added or changed (language/format)."
     },
     colors: {
       new_item: "Discord embed color for new content (decimal format).",

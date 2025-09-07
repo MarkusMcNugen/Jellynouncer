@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiService } from '../services/api'
 import { IconDuotone, IconLight } from '../components/FontAwesomeIcon'
@@ -22,6 +22,67 @@ const Logs = () => {
   const [showStats] = useState(true) // Could be toggled in future
   
   const listRef = useRef(null)
+  const rowHeights = useRef({})
+  const measuredRows = useRef(new Set())
+  const resizeObserver = useRef(null)
+  const containerRef = useRef(null)
+  
+  // Default estimated height for unmeasured rows
+  const estimatedRowHeight = 60
+  
+  // Initialize ResizeObserver
+  useEffect(() => {
+    resizeObserver.current = new ResizeObserver((entries) => {
+      entries.forEach((entry) => {
+        const index = parseInt(entry.target.dataset.index, 10)
+        if (!isNaN(index)) {
+          const newHeight = entry.contentRect.height
+          if (rowHeights.current[index] !== newHeight) {
+            rowHeights.current[index] = newHeight
+            // Reset the list cache for this item
+            if (listRef.current) {
+              listRef.current.resetAfterIndex(index)
+            }
+          }
+        }
+      })
+    })
+    
+    return () => {
+      if (resizeObserver.current) {
+        resizeObserver.current.disconnect()
+      }
+    }
+  }, [])
+  
+  // Clear measurements when logs change
+  useEffect(() => {
+    rowHeights.current = {}
+    measuredRows.current.clear()
+    if (listRef.current) {
+      listRef.current.resetAfterIndex(0)
+    }
+  }, [parsedLogs])
+  
+  // Handle window resize to recalculate wrapped text
+  useEffect(() => {
+    const handleResize = () => {
+      // Clear all measurements on resize since text wrapping may change
+      rowHeights.current = {}
+      measuredRows.current.clear()
+      if (listRef.current) {
+        listRef.current.resetAfterIndex(0)
+      }
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+  
+  // Get item size with measurement
+  const getItemSize = useCallback((index) => {
+    return rowHeights.current[index] || estimatedRowHeight
+  }, [])
   
   // Fetch available log files on component mount
   useEffect(() => {
@@ -128,15 +189,52 @@ const Logs = () => {
     }
   }
   
-  // Row renderer for virtual list
+  // Row renderer for virtual list with measurement
   const LogRow = ({ index, style }) => {
     const log = parsedLogs[index]
+    const rowRef = useRef(null)
+    
+    useEffect(() => {
+      if (rowRef.current && !measuredRows.current.has(index)) {
+        // Measure the actual height of the row
+        const height = rowRef.current.getBoundingClientRect().height
+        if (height > 0) {
+          measuredRows.current.add(index)
+          if (rowHeights.current[index] !== height) {
+            rowHeights.current[index] = height
+            // Observe for future changes
+            if (resizeObserver.current) {
+              resizeObserver.current.observe(rowRef.current)
+            }
+            // Update the list if height changed
+            if (listRef.current) {
+              listRef.current.resetAfterIndex(index)
+            }
+          }
+        }
+      }
+      
+      return () => {
+        // Cleanup observer when row unmounts
+        if (rowRef.current && resizeObserver.current) {
+          resizeObserver.current.unobserve(rowRef.current)
+        }
+      }
+    }, [index, log])
     
     if (!log) return null
     
     if (log.type !== 'log') {
       return (
-        <div style={style} className="flex items-center px-4 py-1 font-mono text-xs text-dark-text-muted">
+        <div 
+          ref={rowRef}
+          data-index={index}
+          style={{
+            ...style,
+            height: 'auto'
+          }} 
+          className="flex items-center px-4 py-1 font-mono text-xs text-dark-text-muted"
+        >
           {log.text}
         </div>
       )
@@ -150,7 +248,12 @@ const Logs = () => {
     
     return (
       <div 
-        style={style} 
+        ref={rowRef}
+        data-index={index}
+        style={{
+          ...style,
+          height: 'auto'
+        }} 
         className={`flex items-start gap-2 px-4 py-2 hover:bg-dark-elevated/50 transition-colors ${formatted.rowClassName}`}
       >
         {/* Timestamp */}
@@ -224,9 +327,9 @@ const Logs = () => {
   }
   
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col -mx-4 sm:-mx-6 lg:-mx-8">
       {/* Header */}
-      <div className="p-4 border-b border-dark-border">
+      <div className="px-4 py-4 border-b border-dark-border">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold">Log Viewer</h2>
           <div className="flex items-center gap-2">
@@ -387,43 +490,27 @@ const Logs = () => {
       )}
       
       {/* Log Viewer */}
-      <div className="flex-1 bg-dark-bg overflow-hidden">
+      <div className="flex-1 bg-dark-bg overflow-hidden px-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="spinner"></div>
           </div>
         ) : parsedLogs.length > 0 ? (
-          <VirtualList
-            ref={listRef}
-            height={window.innerHeight - 200} // Adjust based on header height
-            itemCount={parsedLogs.length}
-            itemSize={(index) => {
-              // Calculate dynamic height based on log content
-              const log = parsedLogs[index];
-              if (!log) return 60;
-              
-              // Base height for single line
-              let height = 60;
-              
-              // Add extra height for multi-line messages
-              if (log.message) {
-                // Count newlines in the message
-                const lineCount = (log.message.match(/\n/g) || []).length + 1;
-                // Add 20px per additional line
-                height = 60 + (lineCount - 1) * 20;
-                
-                // Cap maximum height to prevent extremely tall entries
-                height = Math.min(height, 300);
-              }
-              
-              return height;
-            }}
-            width="100%"
-            className="scrollbar-thin scrollbar-thumb-dark-border scrollbar-track-dark-surface"
-            style={{ overflowX: 'hidden' }}
-          >
-            {LogRow}
-          </VirtualList>
+          <div ref={containerRef} className="h-full w-full">
+            <VirtualList
+              ref={listRef}
+              height={window.innerHeight - 200} // Adjust based on header height
+              itemCount={parsedLogs.length}
+              itemSize={getItemSize}
+              estimatedItemSize={estimatedRowHeight}
+              width="100%"
+              className="scrollbar-thin scrollbar-thumb-dark-border scrollbar-track-dark-surface"
+              style={{ overflowX: 'hidden' }}
+              overscanCount={3} // Render a few extra items for smoother scrolling
+            >
+              {LogRow}
+            </VirtualList>
+          </div>
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">

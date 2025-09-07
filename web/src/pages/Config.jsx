@@ -81,6 +81,7 @@ const Config = () => {
         audio_channels: true,
         hdr_status: true,
         file_size: true,
+        subtitles: true,
       },
       colors: {
         new_item: 65280,

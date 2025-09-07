@@ -36,6 +36,8 @@
   - [Advanced Template System](#-advanced-template-system)
   - [External Metadata Integration](#-external-metadata-integration)
   - [Production-Ready Features](#-production-ready-features)
+  - [Security & Authentication](#-security--authentication)
+  - [Backup & Recovery](#-backup--recovery)
   - [Deployment & Operations](#-deployment--operations)
 - [Quick Start](#-quick-start)
   - [Prerequisites](#prerequisites)
@@ -143,6 +145,73 @@ The service acts as a smart filter between Jellyfin's webhook events and Discord
 - `deleted_item.j2` - Item removal notifications
 - `new_items_grouped.j2` - Batched new items
 - `upgraded_items_grouped.j2` - Batched upgrades
+
+</details>
+
+<details>
+<summary>💾 <b>Backup Management</b> - Automated backup and restore system</summary>
+
+**Backup Features:**
+- **Scheduled Backups**: Automatic daily/weekly/hourly backups
+- **Manual Backups**: Create backups on-demand with descriptions
+- **Selective Restore**: Choose which components to restore (config, database, templates, SSL, logs)
+- **Retention Policies**: Automatic cleanup based on age and count
+- **Compression**: Optional compression to save disk space
+- **Pre-Restore Backups**: Automatic safety backup before restore operations
+- **Real-time Statistics**: View backup sizes, counts, and next scheduled time
+
+**Backup Dashboard:**
+- System status indicator (enabled/disabled)
+- Next backup countdown
+- Estimated backup size
+- List of all backups with sizes and timestamps
+- One-click restore with component selection
+- Backup deletion with confirmation
+
+</details>
+
+<details>
+<summary>🔒 <b>Authentication System</b> - Secure access control with multiple auth methods</summary>
+
+**Authentication Features:**
+- **Setup Wizard**: Guided setup to prevent lockouts
+- **JWT Tokens**: Short-lived access tokens (30min) with refresh tokens (7 days)
+- **Password Management**: Secure bcrypt hashing with salt
+- **Emergency Recovery**: Access recovery via JWT_SECRET_KEY environment variable
+- **Audit Logging**: Track all authentication events
+
+**Webhook Authentication:**
+- **API Keys**: Non-expiring keys for service integrations
+- **Basic Auth**: Username/password for simple integrations
+- **Bearer Tokens**: JWT tokens for advanced integrations
+- **IP Validation**: Optional IP-based trust for service tokens
+- **Usage Tracking**: Monitor API key usage and last access
+
+**Security Dashboard:**
+- Manage API keys with descriptions
+- View usage statistics per key
+- Revoke keys with audit trail
+- Password change interface
+- Session management
+
+</details>
+
+<details>
+<summary>📊 <b>Notification History</b> - Track all notification events</summary>
+
+**History Features:**
+- **Complete Tracking**: Every notification attempt logged
+- **Status Monitoring**: Pending, sent, failed states
+- **Error Details**: Response codes and error messages
+- **Time Tracking**: Created and sent timestamps
+- **Filtering**: By status, type, time range
+- **Pagination**: Efficient browsing of large histories
+
+**Statistics:**
+- Hourly and daily aggregation
+- Success/failure rates
+- Content type distribution
+- Performance metrics
 
 </details>
 
@@ -1026,6 +1095,62 @@ JELLYNOUNCER_RUN_MODE=web
 
 </details>
 
+## 🔒 Security & Authentication
+
+Jellynouncer provides enterprise-grade security features to protect your media server integrations:
+
+### Multi-Method Authentication
+- **Web Interface**: JWT-based authentication with refresh tokens
+- **Webhook Endpoints**: Multiple auth methods for flexibility
+  - API Keys for permanent service integration
+  - Basic Authentication for simple tools
+  - Bearer tokens for advanced integrations
+- **Emergency Access**: Recovery mechanism via JWT_SECRET_KEY
+
+### Security Best Practices
+- Bcrypt password hashing with salt
+- Short-lived access tokens (30 minutes)
+- Refresh tokens with 7-day expiry
+- Audit logging for all authentication events
+- IP-based validation for service tokens
+- Rate limiting on authentication endpoints
+
+### Setup Process
+1. Initial setup wizard prevents lockouts
+2. Create admin account before enabling auth
+3. Generate API keys for Jellyfin webhook
+4. Configure webhook authentication if needed
+
+## 💾 Backup & Recovery
+
+Comprehensive backup system to protect your configuration and data:
+
+### Automated Backups
+- **Scheduled**: Daily, weekly, or hourly backups
+- **Components**: Selective backup of config, database, templates, SSL certs, logs
+- **Retention**: Automatic cleanup based on age and count
+- **Compression**: Optional compression to save space
+
+### Recovery Features
+- **Selective Restore**: Choose which components to restore
+- **Pre-Restore Backup**: Automatic safety backup before restore
+- **Point-in-Time**: Restore to any previous backup
+- **Zero Downtime**: Hot restore without service interruption
+
+### Backup Configuration
+```json
+{
+  "backup": {
+    "enabled": true,
+    "schedule": "daily",
+    "backup_time": "02:00",
+    "retention_days": 30,
+    "max_backups": 10,
+    "compress": true
+  }
+}
+```
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -1485,8 +1610,16 @@ graph TD
 | `/api/logs` | GET | Log retrieval with filtering |
 | `/api/auth/login` | POST | User authentication |
 | `/api/auth/refresh` | POST | Token refresh |
+| `/api/auth/setup` | POST | Initial admin account setup |
 | `/api/security` | GET/POST | Security settings |
 | `/api/ssl` | GET/POST | SSL/TLS configuration |
+| `/api/backup/status` | GET | Backup system status |
+| `/api/backup/list` | GET | List available backups |
+| `/api/backup/create` | POST | Create manual backup |
+| `/api/backup/restore/{name}` | POST | Restore from backup |
+| `/api/backup/config` | PUT | Update backup configuration |
+| `/api/webhook-keys` | GET/POST | Webhook API key management |
+| `/api/notifications` | GET | Notification history with pagination |
 
 <details>
 <summary><b>📖 View API Examples</b></summary>

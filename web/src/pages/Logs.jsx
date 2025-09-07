@@ -123,7 +123,7 @@ const Logs = () => {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   
   // Fetch logs - now using raw logs endpoint for better multi-line support
-  const { data: logsResponse, refetch, isLoading } = useQuery({
+  const { data: logsResponse, refetch, isLoading, error: queryError } = useQuery({
     queryKey: ['logs', logFile, lines, level, component, search],
     queryFn: async () => {
       const fetchTimer = logger.startTimer('[Logs] Fetch log data');
@@ -161,6 +161,16 @@ const Logs = () => {
           response: err.response?.data,
           file: logFile
         });
+        // Ensure we throw a proper error object, not the response data
+        if (err.response?.data?.detail) {
+          // Handle Pydantic validation errors
+          const detail = err.response.data.detail;
+          if (Array.isArray(detail) && detail.length > 0) {
+            throw new Error(detail[0].msg || 'Validation error');
+          } else if (typeof detail === 'string') {
+            throw new Error(detail);
+          }
+        }
         throw err;
       }
     },
@@ -458,7 +468,6 @@ const Logs = () => {
             <option value={100}>Last 100</option>
             <option value={500}>Last 500</option>
             <option value={1000}>Last 1000</option>
-            <option value={5000}>Last 5000</option>
           </select>
           
           <div className="relative group">
@@ -539,7 +548,24 @@ const Logs = () => {
       
       {/* Log Viewer */}
       <div className="flex-1 bg-dark-bg overflow-hidden px-4">
-        {isLoading ? (
+        {queryError ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <IconDuotone icon="circle-exclamation" size="3x" className="text-red-500 mx-auto mb-4" />
+              <p className="text-red-400 font-semibold">Error loading logs</p>
+              <p className="text-sm text-dark-text-muted mt-2">
+                {queryError.message || 'Failed to fetch logs'}
+              </p>
+              <button 
+                onClick={() => refetch()}
+                className="btn btn-primary mt-4"
+              >
+                <IconDuotone icon="arrows-rotate" className="mr-2" />
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="spinner"></div>
           </div>

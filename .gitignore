@@ -100,3 +100,7 @@ node_modules/
 /web/overview-page.png
 /web/test-pages.js
 /web/test-pages.mjs
+/web/src/types/index.d.ts
+/web/jsconfig.json
+/web/test-overview.js
+/web/test-overview.mjs

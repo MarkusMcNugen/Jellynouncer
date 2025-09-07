@@ -112,7 +112,7 @@ const Overview = () => {
     void fetchData();
     const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getHealthColor = (status) => {
     switch (status) {
@@ -366,557 +366,648 @@ const Overview = () => {
 
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
-      <div className="px-4 sm:px-6 lg:px-8 space-y-6">
+      <div className="px-4 sm:px-6 lg:px-8 space-y-8">
         {/* Header */}
         <div className="flex justify-between items-center pt-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Monitor your Jellynouncer service health and statistics
-          </p>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Monitor your Jellynouncer service health and statistics
+            </p>
+          </div>
+          <button
+            onClick={fetchData}
+            disabled={refreshing}
+            className={`
+              inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md
+              text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 
+              focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed
+            `}
+          >
+            <Icon icon="arrows-rotate" className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={refreshing}
-          className={`
-            inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md
-            text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 
-            focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed
-          `}
-        >
-          <Icon icon="arrows-rotate" className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
-      </div>
 
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-        </div>
-      )}
-
-      {/* Webhook & Notification Statistics */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          <Icon icon="webhook" className="mr-2" />
-          Webhook & Notification Activity
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="flex-shrink-0 p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                  <Icon icon="download" className="text-blue-600 dark:text-blue-300" size="lg" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Webhooks Received
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {formatNumber(stats?.webhook_stats?.received || 0)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatNumber(stats?.webhook_stats?.processed || 0)} processed
-                  </p>
-                </div>
-              </div>
-              {/* Circular progress indicator */}
-              <div className="relative">
-                <svg className="w-12 h-12 transform -rotate-90">
-                  <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                    className="text-gray-200 dark:text-gray-700"
-                  />
-                  <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                    strokeDasharray={`${(stats?.webhook_stats?.processing_rate || 0) * 1.26} 126`}
-                    className="text-blue-600 dark:text-blue-400"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs font-bold text-gray-900 dark:text-white">
-                    {Math.round(stats?.webhook_stats?.processing_rate || 0)}%
-                  </span>
-                </div>
-              </div>
-            </div>
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
           </div>
+        )}
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="flex-shrink-0 p-3 bg-green-100 dark:bg-green-900 rounded-lg">
-                  <Icon icon="paper-plane" className="text-green-600 dark:text-green-300" size="lg" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Notifications Sent
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {formatNumber(stats?.notification_stats?.sent || 0)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatNumber(stats?.notification_stats?.failed || 0)} failed
-                  </p>
-                </div>
-              </div>
-              {/* Circular progress indicator */}
-              <div className="relative">
-                <svg className="w-12 h-12 transform -rotate-90">
-                  <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                    className="text-gray-200 dark:text-gray-700"
-                  />
-                  <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                    strokeDasharray={`${(stats?.notification_stats?.success_rate || 0) * 1.26} 126`}
-                    className="text-green-600 dark:text-green-400"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-xs font-bold text-gray-900 dark:text-white">
-                    {Math.round(stats?.notification_stats?.success_rate || 0)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 p-3 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
-                <Icon icon="filter" className="text-yellow-600 dark:text-yellow-300" size="lg" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Events Filtered
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(
-                    (stats?.filtering_stats?.renames_filtered || 0) +
-                    (stats?.filtering_stats?.deletes_filtered || 0) +
-                    (stats?.filtering_stats?.mass_renames_caught || 0)
-                  )}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Spam prevented
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 p-3 bg-red-100 dark:bg-red-900 rounded-lg">
-                <Icon icon="circle-xmark" className="text-red-600 dark:text-red-300" size="lg" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Failed Events
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(
-                    (stats?.webhook_stats?.failed || 0) +
-                    (stats?.notification_stats?.failed || 0)
-                  )}
-                </p>
-                <p className="text-xs text-red-600 dark:text-red-400">
-                  Needs attention
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Synced Items & Jellyfin Comparison */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          <Icon icon="database" className="mr-2" />
-          Library Synchronization
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Jellyfin Library
-                </p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(stats?.jellyfin_stats?.total_items || 0)}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  <Icon icon="film" className="mr-1" size="xs" />
-                  {stats?.jellyfin_stats?.movie_count || 0} Movies
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  <Icon icon="tv" className="mr-1" size="xs" />
-                  {stats?.jellyfin_stats?.episode_count || 0} Episodes
-                </p>
-              </div>
-              <Icon icon="server" className="text-purple-500" size="2x" />
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Synced Items
-                </p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(stats?.synced_items?.total || 0)}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Database: {stats?.synced_items?.database_size_mb || 0} MB
-                </p>
-                <div className="mt-2">
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-purple-600 h-2 rounded-full"
-                      style={{
-                        width: `${Math.min(
-                          ((stats?.synced_items?.total || 0) / Math.max(stats?.jellyfin_stats?.total_items || 1, 1)) * 100,
-                          100
-                        )}%`
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {Math.round(
-                      ((stats?.synced_items?.total || 0) / Math.max(stats?.jellyfin_stats?.total_items || 1, 1)) * 100
-                    )}% coverage
-                  </p>
-                </div>
-              </div>
-              <Icon icon="hard-drive" className="text-blue-500" size="2x" />
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Content Processed
-                </p>
-                <div className="mt-2 space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      <Icon icon="plus" className="mr-1" size="xs" />
-                      New
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {stats?.historical_stats?.totals?.total_new || 0}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      <Icon icon="arrow-up" className="mr-1" size="xs" />
-                      Upgraded
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {stats?.historical_stats?.totals?.total_upgraded || 0}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      <Icon icon="trash" className="mr-1" size="xs" />
-                      Deleted
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {stats?.historical_stats?.totals?.total_deleted || 0}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      <Icon icon="code" className="mr-1" size="xs" />
-                      Metadata
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {stats?.filtering_stats?.metadata_only || 0}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <Icon icon="chart-line" className="text-green-500" size="2x" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Health Status Cards */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          <Icon icon="heart-pulse" className="mr-2" />
-          System Health
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {health && health['components'] && Object.entries(health['components']).map(([name, status]) => (
-            <div key={name} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        {/* SECTION 1: Jellyfin Server Statistics */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <Icon icon="server" className="mr-3 text-purple-600" size="lg" />
+            Jellyfin Server
+          </h2>
+          
+          {/* Library Overview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400 capitalize">
-                    {name.replace('_', ' ')}
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Total Library Items
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                    {status}
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {formatNumber(stats?.jellyfin_stats?.total_items || 0)}
                   </p>
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    <div className="flex justify-between">
+                      <span><Icon icon="film" className="mr-1" size="xs" />Movies</span>
+                      <span className="font-medium">{stats?.jellyfin_stats?.movie_count || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span><Icon icon="tv" className="mr-1" size="xs" />Episodes</span>
+                      <span className="font-medium">{stats?.jellyfin_stats?.episode_count || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span><Icon icon="music" className="mr-1" size="xs" />Music</span>
+                      <span className="font-medium">{stats?.jellyfin_stats?.music_count || 0}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className={`p-2 rounded-full ${getHealthColor(status)}`}>
-                  <Icon icon={getHealthIcon(status)} size="lg" />
-                </div>
+                <Icon icon="database" className="text-purple-500 opacity-20" size="3x" />
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            <Icon icon="chart-line" className="mr-2" />
-            Activity Over Time (24 Hours)
-          </h2>
-          <div className="h-64">
-            <Line data={lineChartData} options={chartOptions} />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            <Icon icon="chart-pie" className="mr-2" />
-            Content Distribution
-          </h2>
-          <div className="h-64">
-            <Doughnut data={contentTypeChartData} options={{ ...chartOptions, aspectRatio: 1 }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Filtering Trends Over Time */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          <Icon icon="filter" className="mr-2" />
-          Filtering Trends (24 Hours)
-        </h2>
-        <div className="h-64">
-          <Line data={filteringTrendData} options={stackedAreaOptions} />
-        </div>
-      </div>
-
-      {/* Channel Routing and Success Rates */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            <Icon icon="hashtag" className="mr-2" />
-            Discord Channel Routing
-          </h2>
-          <div className="h-48">
-            <Bar data={channelChartData} options={chartOptions} />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            <Icon icon="shield-halved" className="mr-2" />
-            Filtering Effectiveness Summary
-          </h2>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                <Icon icon="file-pen" className="mr-2" size="sm" />
-                Renames Filtered
-              </span>
-              <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                {stats?.filtering_stats?.renames_filtered || 0}
-              </span>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Local Database Sync
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {formatNumber(stats?.synced_items?.total || 0)}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Database: {stats?.synced_items?.database_size_mb || 0} MB
+                  </p>
+                  <div className="mt-3">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-purple-600 h-2 rounded-full transition-all duration-500"
+                        style={Object.assign({}, {
+                          width: `${Math.min(
+                            ((stats?.synced_items?.total || 0) / Math.max(stats?.jellyfin_stats?.total_items || 1, 1)) * 100,
+                            100
+                          )}%`
+                        })}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {Math.round(
+                        ((stats?.synced_items?.total || 0) / Math.max(stats?.jellyfin_stats?.total_items || 1, 1)) * 100
+                      )}% synced
+                    </p>
+                  </div>
+                </div>
+                <Icon icon="hard-drive" className="text-blue-500 opacity-20" size="3x" />
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                <Icon icon="trash-can" className="mr-2" size="sm" />
-                Deletes Filtered
-              </span>
-              <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                {stats?.filtering_stats?.deletes_filtered || 0}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                <Icon icon="layer-group" className="mr-2" size="sm" />
-                Mass Renames Caught
-              </span>
-              <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                {stats?.filtering_stats?.mass_renames_caught || 0}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                <Icon icon="code-branch" className="mr-2" size="sm" />
-                Metadata-Only Updates
-              </span>
-              <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                {stats?.filtering_stats?.metadata_only || 0}
-              </span>
-            </div>
-            <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Total Spam Prevented
-                </span>
-                <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                  {formatNumber(
-                    (stats?.filtering_stats?.renames_filtered || 0) +
-                    (stats?.filtering_stats?.deletes_filtered || 0) +
-                    (stats?.filtering_stats?.mass_renames_caught || 0) +
-                    (stats?.filtering_stats?.metadata_only || 0)
-                  )}
-                </span>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Server Status
+                  </p>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white capitalize mt-1">
+                    {stats?.jellyfin_stats?.server_name || 'Unknown'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Version: {stats?.jellyfin_stats?.server_version || 'Unknown'}
+                  </p>
+                  <div className="mt-3 flex items-center">
+                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      stats?.jellyfin_stats?.server_status === 'online' ? 'bg-green-100 text-green-800' :
+                      stats?.jellyfin_stats?.server_status === 'error' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {stats?.jellyfin_stats?.server_status || 'unknown'}
+                    </div>
+                  </div>
+                </div>
+                <Icon icon="signal" className="text-green-500 opacity-20" size="3x" />
               </div>
             </div>
           </div>
+
+          {/* Detailed Jellyfin Stats Component */}
+          {stats && stats['jellyfin_stats'] && (
+            <JellyfinStats stats={stats['jellyfin_stats']} />
+          )}
         </div>
-      </div>
 
-      {/* Jellyfin Server Statistics */}
-      {stats && stats['jellyfin_stats'] && (
-        <JellyfinStats stats={stats['jellyfin_stats']} />
-      )}
-
-      {/* System Performance */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          <Icon icon="gauge-high" className="mr-2" />
-          System Performance
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">
-              {stats?.system_health?.cpu_usage || 0}%
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">CPU Usage</p>
-          </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">
-              {stats?.system_health?.memory_usage || 0}%
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Memory Usage</p>
-          </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">
-              {stats?.system_health?.disk_usage || 0}%
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Disk Usage</p>
-          </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">
-              {stats?.system_health?.uptime_hours || 0}h
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Uptime</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Notifications */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            <Icon icon="bell" className="mr-2" />
-            Recent Notifications
+        {/* SECTION 2: Processing Pipeline */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <Icon icon="gears" className="mr-3 text-blue-600" size="lg" />
+            Processing Pipeline
           </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0 p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                    <Icon icon="download" className="text-blue-600 dark:text-blue-300" size="lg" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      Webhooks Received
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {formatNumber(stats?.webhook_stats?.received || 0)}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatNumber(stats?.webhook_stats?.processed || 0)} processed
+                    </p>
+                  </div>
+                </div>
+                {/* Circular progress indicator */}
+                <div className="relative">
+                  <svg className="w-12 h-12 transform -rotate-90">
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                      className="text-gray-200 dark:text-gray-700"
+                    />
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                      strokeDasharray={`${(stats?.webhook_stats?.processing_rate || 0) * 1.26} 126`}
+                      className="text-blue-600 dark:text-blue-400"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white">
+                      {Math.round(stats?.webhook_stats?.processing_rate || 0)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 p-3 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+                  <Icon icon="filter" className="text-yellow-600 dark:text-yellow-300" size="lg" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Events Filtered
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {formatNumber(
+                      (stats?.filtering_stats?.renames_filtered || 0) +
+                      (stats?.filtering_stats?.deletes_filtered || 0) +
+                      (stats?.filtering_stats?.mass_renames_caught || 0)
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Spam prevented
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0 p-3 bg-green-100 dark:bg-green-900 rounded-lg">
+                    <Icon icon="paper-plane" className="text-green-600 dark:text-green-300" size="lg" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      Notifications Sent
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {formatNumber(stats?.notification_stats?.sent || 0)}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatNumber(stats?.notification_stats?.failed || 0)} failed
+                    </p>
+                  </div>
+                </div>
+                {/* Circular progress indicator */}
+                <div className="relative">
+                  <svg className="w-12 h-12 transform -rotate-90">
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                      className="text-gray-200 dark:text-gray-700"
+                    />
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                      strokeDasharray={`${(stats?.notification_stats?.success_rate || 0) * 1.26} 126`}
+                      className="text-green-600 dark:text-green-400"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white">
+                      {Math.round(stats?.notification_stats?.success_rate || 0)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 p-3 bg-red-100 dark:bg-red-900 rounded-lg">
+                  <Icon icon="circle-xmark" className="text-red-600 dark:text-red-300" size="lg" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Failed Events
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {formatNumber(
+                      (stats?.webhook_stats?.failed || 0) +
+                      (stats?.notification_stats?.failed || 0)
+                    )}
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    Needs attention
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Activity Chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              <Icon icon="chart-line" className="mr-2" />
+              Activity Over Time (24 Hours)
+            </h3>
+            <div className="h-64">
+              <Line data={lineChartData} options={chartOptions} />
+            </div>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Title
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Event
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {recentNotifications.length > 0 ? (
-                recentNotifications.map((notification, index) => (
-                  <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
-                      {new Date(notification.timestamp).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center text-sm text-gray-900 dark:text-gray-300">
-                        <Icon icon={getContentIcon(notification.type)} className="mr-2" size="sm" />
-                        <span>{notification.type}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
-                      {notification.title || notification.name || 'Unknown'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
-                      <span className={`
-                        inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${notification.event === 'new' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
-                          notification.event === 'upgraded' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                          notification.event === 'deleted' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}
-                      `}>
-                        {notification.event || notification.last_event || 'unknown'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
-                      <span className={`
-                        inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${notification.status === 'sent' || notification.status === 'success' ? 
-                          'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
-                          notification.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}
-                      `}>
-                        {notification.status || 'pending'}
-                      </span>
+
+        {/* SECTION 3: Content Distribution & Routing */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <Icon icon="route" className="mr-3 text-green-600" size="lg" />
+            Content Distribution & Discord Routing
+          </h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Content Type Distribution */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                <Icon icon="chart-pie" className="mr-2" />
+                Content Types
+              </h3>
+              <div className="h-64">
+                <Doughnut data={contentTypeChartData} options={Object.assign({}, chartOptions, { aspectRatio: 1 })} />
+              </div>
+            </div>
+
+            {/* Channel Routing */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                <Icon icon="hashtag" className="mr-2" />
+                Discord Channels
+              </h3>
+              <div className="h-64">
+                <Bar data={channelChartData} options={chartOptions} />
+              </div>
+            </div>
+
+            {/* Processing Stats */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                <Icon icon="list-check" className="mr-2" />
+                Processing Summary
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">New Items</span>
+                    <span className="text-sm font-medium">{stats?.historical_stats?.totals?.total_new || 0}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div className="bg-green-600 h-2 rounded-full" style={Object.assign({}, {width: '45%'})}></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Upgraded</span>
+                    <span className="text-sm font-medium">{stats?.historical_stats?.totals?.total_upgraded || 0}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div className="bg-blue-600 h-2 rounded-full" style={Object.assign({}, {width: '30%'})}></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Deleted</span>
+                    <span className="text-sm font-medium">{stats?.historical_stats?.totals?.total_deleted || 0}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div className="bg-red-600 h-2 rounded-full" style={Object.assign({}, {width: '15%'})}></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Filtered</span>
+                    <span className="text-sm font-medium">
+                      {(stats?.filtering_stats?.renames_filtered || 0) +
+                       (stats?.filtering_stats?.deletes_filtered || 0) +
+                       (stats?.filtering_stats?.metadata_only || 0)}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div className="bg-yellow-600 h-2 rounded-full" style={Object.assign({}, {width: '10%'})}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 4: Filtering Intelligence */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <Icon icon="shield-halved" className="mr-3 text-yellow-600" size="lg" />
+            Filtering Intelligence
+          </h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Filtering Trends Chart */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                <Icon icon="filter" className="mr-2" />
+                Filtering Trends (24 Hours)
+              </h3>
+              <div className="h-64">
+                <Line data={filteringTrendData} options={stackedAreaOptions} />
+              </div>
+            </div>
+
+            {/* Filtering Effectiveness */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                <Icon icon="shield-check" className="mr-2" />
+                Filtering Effectiveness
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <Icon icon="file-pen" className="mr-2" size="sm" />
+                    Renames Filtered
+                  </span>
+                  <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {stats?.filtering_stats?.renames_filtered || 0}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <Icon icon="trash-can" className="mr-2" size="sm" />
+                    Deletes Filtered
+                  </span>
+                  <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {stats?.filtering_stats?.deletes_filtered || 0}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <Icon icon="layer-group" className="mr-2" size="sm" />
+                    Mass Renames Caught
+                  </span>
+                  <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {stats?.filtering_stats?.mass_renames_caught || 0}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <Icon icon="code-branch" className="mr-2" size="sm" />
+                    Metadata-Only Updates
+                  </span>
+                  <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {stats?.filtering_stats?.metadata_only || 0}
+                  </span>
+                </div>
+                <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Total Spam Prevented
+                    </span>
+                    <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                      {formatNumber(
+                        (stats?.filtering_stats?.renames_filtered || 0) +
+                        (stats?.filtering_stats?.deletes_filtered || 0) +
+                        (stats?.filtering_stats?.mass_renames_caught || 0) +
+                        (stats?.filtering_stats?.metadata_only || 0)
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Notifications Table */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <Icon icon="bell" className="mr-2" />
+              Recent Notifications
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-900">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Title
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Event
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {recentNotifications.length > 0 ? (
+                  recentNotifications.map((notification, index) => (
+                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
+                        {new Date(notification.timestamp).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center text-sm text-gray-900 dark:text-gray-300">
+                          <Icon icon={getContentIcon(notification.type)} className="mr-2" size="sm" />
+                          <span>{notification.type}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
+                        {notification.title || notification.name || 'Unknown'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
+                        <span className={`
+                          inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                          ${notification.event === 'new' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
+                            notification.event === 'upgraded' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                            notification.event === 'deleted' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}
+                        `}>
+                          {notification.event || notification.last_event || 'unknown'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-300">
+                        <span className={`
+                          inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                          ${notification.status === 'sent' || notification.status === 'success' ? 
+                            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
+                            notification.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}
+                        `}>
+                          {notification.status || 'pending'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No recent notifications
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    No recent notifications
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+
+        {/* SECTION 5: System Health (moved to bottom) */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <Icon icon="heart-pulse" className="mr-3 text-red-600" size="lg" />
+            System Health & Performance
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Service Health Status */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Service Status</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {health && health['components'] && Object.entries(health['components']).map(([name, status]) => (
+                  <div key={name} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 capitalize">
+                          {name.replace('_', ' ')}
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
+                          {status}
+                        </p>
+                      </div>
+                      <div className={`p-2 rounded-full ${getHealthColor(status)}`}>
+                        <Icon icon={getHealthIcon(status)} size="lg" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* System Performance Metrics */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Performance Metrics</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">CPU Usage</span>
+                      <span className="text-sm font-medium">{stats?.system_health?.cpu_usage || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${
+                          (stats?.system_health?.cpu_usage || 0) > 80 ? 'bg-red-600' :
+                          (stats?.system_health?.cpu_usage || 0) > 60 ? 'bg-yellow-600' : 'bg-green-600'
+                        }`}
+                        style={Object.assign({}, {width: `${stats?.system_health?.cpu_usage || 0}%`})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Memory</span>
+                      <span className="text-sm font-medium">{stats?.system_health?.memory_usage || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${
+                          (stats?.system_health?.memory_usage || 0) > 80 ? 'bg-red-600' :
+                          (stats?.system_health?.memory_usage || 0) > 60 ? 'bg-yellow-600' : 'bg-green-600'
+                        }`}
+                        style={Object.assign({}, {width: `${stats?.system_health?.memory_usage || 0}%`})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Disk Usage</span>
+                      <span className="text-sm font-medium">{stats?.system_health?.disk_usage || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${
+                          (stats?.system_health?.disk_usage || 0) > 80 ? 'bg-red-600' :
+                          (stats?.system_health?.disk_usage || 0) > 60 ? 'bg-yellow-600' : 'bg-green-600'
+                        }`}
+                        style={Object.assign({}, {width: `${stats?.system_health?.disk_usage || 0}%`})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Uptime</span>
+                      <span className="text-sm font-medium">{stats?.system_health?.uptime_hours || 0}h</span>
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {stats?.system_health?.uptime_percentage || 100}% availability
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );

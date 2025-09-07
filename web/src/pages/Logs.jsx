@@ -55,14 +55,7 @@ const Logs = () => {
     }
   }, [])
   
-  // Clear measurements when logs change
-  useEffect(() => {
-    rowHeights.current = {}
-    measuredRows.current.clear()
-    if (listRef.current) {
-      listRef.current.resetAfterIndex(0)
-    }
-  }, [parsedLogs])
+  // This effect will be moved after parsedLogs is defined
   
   // Handle window resize to recalculate wrapped text
   useEffect(() => {
@@ -170,6 +163,15 @@ const Logs = () => {
     return { parsedLogs: reversed, stats: statistics }
   }, [logsResponse, level, component, search])
   
+  // Clear measurements when logs change
+  useEffect(() => {
+    rowHeights.current = {}
+    measuredRows.current.clear()
+    if (listRef.current) {
+      listRef.current.resetAfterIndex(0)
+    }
+  }, [parsedLogs])
+  
   // Get log level icon
   const getLevelIcon = (level) => {
     switch(level) {
@@ -195,16 +197,18 @@ const Logs = () => {
     const rowRef = useRef(null)
     
     useEffect(() => {
-      if (rowRef.current && !measuredRows.current.has(index)) {
+      const currentRowRef = rowRef.current
+      
+      if (currentRowRef && !measuredRows.current.has(index)) {
         // Measure the actual height of the row
-        const height = rowRef.current.getBoundingClientRect().height
+        const height = currentRowRef.getBoundingClientRect().height
         if (height > 0) {
           measuredRows.current.add(index)
           if (rowHeights.current[index] !== height) {
             rowHeights.current[index] = height
             // Observe for future changes
             if (resizeObserver.current) {
-              resizeObserver.current.observe(rowRef.current)
+              resizeObserver.current.observe(currentRowRef)
             }
             // Update the list if height changed
             if (listRef.current) {
@@ -216,8 +220,8 @@ const Logs = () => {
       
       return () => {
         // Cleanup observer when row unmounts
-        if (rowRef.current && resizeObserver.current) {
-          resizeObserver.current.unobserve(rowRef.current)
+        if (currentRowRef && resizeObserver.current) {
+          resizeObserver.current.unobserve(currentRowRef)
         }
       }
     }, [index, log])
@@ -229,10 +233,7 @@ const Logs = () => {
         <div 
           ref={rowRef}
           data-index={index}
-          style={{
-            ...style,
-            height: 'auto'
-          }} 
+          style={Object.assign({}, style, { height: 'auto' })}
           className="flex items-center px-4 py-1 font-mono text-xs text-dark-text-muted"
         >
           {log.text}
@@ -246,14 +247,32 @@ const Logs = () => {
       highlightSearch: search 
     })
     
+    // Process the message HTML outside of JSX
+    let processedMessage = log.message
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+    
+    // Then apply search highlighting if needed
+    if (search) {
+      processedMessage = processedMessage.replace(
+        new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
+        '<mark style="background-color: rgba(251, 191, 36, 0.3); color: rgb(254, 240, 138);">$1</mark>'
+      );
+    }
+    
+    // Convert newlines to <br> tags for proper display
+    processedMessage = processedMessage.replace(/\r\n/g, '<br>');
+    processedMessage = processedMessage.replace(/\n/g, '<br>');
+    processedMessage = processedMessage.replace(/\r/g, '<br>');
+    
     return (
       <div 
         ref={rowRef}
         data-index={index}
-        style={{
-          ...style,
-          height: 'auto'
-        }} 
+        style={Object.assign({}, style, { height: 'auto' })}
         className={`flex items-start gap-2 px-4 py-2 hover:bg-dark-elevated/50 transition-colors ${formatted.rowClassName}`}
       >
         {/* Timestamp */}
@@ -264,10 +283,10 @@ const Logs = () => {
         {/* Level */}
         <span 
           className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold min-w-[80px] justify-center flex-shrink-0"
-          style={{ 
+          style={Object.assign({}, {
             color: formatted.level.color,
             backgroundColor: formatted.level.bgColor 
-          }}
+          })}
         >
           {getLevelIcon(log.level)}
           {log.level}
@@ -281,34 +300,8 @@ const Logs = () => {
         {/* Message - preserving leading spaces and proper overflow handling */}
         <span 
           className="flex-1 text-sm font-mono text-dark-text-primary break-all whitespace-pre-wrap overflow-wrap-anywhere"
-          style={{ wordBreak: 'break-word' }}
-          dangerouslySetInnerHTML={{ 
-            __html: (() => {
-              // First escape HTML to prevent XSS
-              let processedMessage = log.message
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-              
-              // Then apply search highlighting if needed
-              if (search) {
-                processedMessage = processedMessage.replace(
-                  new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
-                  '<mark class="bg-yellow-400/30 text-yellow-200">$1</mark>'
-                );
-              }
-              
-              // Convert newlines to <br> tags for proper display
-              // Handle both Unix (\n) and Windows (\r\n) line endings
-              processedMessage = processedMessage.replace(/\r\n/g, '<br>');
-              processedMessage = processedMessage.replace(/\n/g, '<br>');
-              processedMessage = processedMessage.replace(/\r/g, '<br>');
-              
-              return processedMessage;
-            })()
-          }}
+          style={Object.assign({}, { wordBreak: 'break-word' })}
+          dangerouslySetInnerHTML={Object.assign({}, { __html: processedMessage })}
         />
       </div>
     )
@@ -460,10 +453,10 @@ const Logs = () => {
                 <div key={levelName} className="flex items-center gap-2">
                   <span 
                     className="px-2 py-0.5 rounded text-xs font-bold"
-                    style={{ 
+                    style={Object.assign({}, {
                       color: levelStyle.color,
                       backgroundColor: levelStyle.bgColor 
-                    }}
+                    })}
                   >
                     {levelName}
                   </span>
@@ -505,7 +498,7 @@ const Logs = () => {
               estimatedItemSize={estimatedRowHeight}
               width="100%"
               className="scrollbar-thin scrollbar-thumb-dark-border scrollbar-track-dark-surface"
-              style={{ overflowX: 'hidden' }}
+              style={Object.assign({}, { overflowX: 'hidden' })}
               overscanCount={3} // Render a few extra items for smoother scrolling
             >
               {LogRow}

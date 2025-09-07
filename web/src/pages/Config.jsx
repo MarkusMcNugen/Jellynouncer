@@ -338,8 +338,9 @@ const Config = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+    <div className="-mx-4 sm:-mx-6 lg:-mx-8">
+      <div className="px-4 sm:px-6 lg:px-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
@@ -1343,6 +1344,7 @@ const Config = () => {
           onClose={() => setShowAuthSetup(false)}
         />
       )}
+      </div>
     </div>
   );
 };

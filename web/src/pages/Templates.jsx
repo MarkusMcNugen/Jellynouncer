@@ -131,8 +131,9 @@ const Templates = () => {
   }, [templates]); // Only depend on templates to avoid re-running
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b border-dark-border">
+    <div className="h-full flex flex-col -mx-4 sm:-mx-6 lg:-mx-8">
+      <div className="px-4 sm:px-6 lg:px-8 h-full flex flex-col">
+        <div className="flex items-center justify-between py-4 border-b border-dark-border">
         <h2 className="text-2xl font-bold">Template Editor</h2>
         <div className="flex gap-2">
           <button 
@@ -525,6 +526,7 @@ const Templates = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

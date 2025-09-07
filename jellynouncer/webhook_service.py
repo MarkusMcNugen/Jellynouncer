@@ -40,6 +40,7 @@ from .metadata_services import MetadataService
 from .change_detector import ChangeDetector
 from .utils import get_logger
 from .sync_progress import SyncProgressDisplay
+from .web_database import WebDatabaseManager
 
 
 class WebhookService:
@@ -152,6 +153,7 @@ class WebhookService:
         self.change_detector = None
         self.discord = None
         self.metadata_service = None
+        self.web_db = None  # Web database for stats tracking
 
         # Initialize service state tracking attributes
         # These keep track of what the service is currently doing
@@ -304,10 +306,21 @@ class WebhookService:
                 self.logger.error(f"Change detector initialization failed: {e}")
                 raise SystemExit(f"Cannot start without change detection: {e}")
 
-            # Step 7: Perform initial library sync if needed
+            # Step 7: Initialize web database for stats tracking (non-critical)
+            self.logger.debug("Initializing web database for statistics...")
+            try:
+                self.web_db = WebDatabaseManager()
+                await self.web_db.initialize()
+                self.logger.info("Web database initialized for statistics tracking")
+            except Exception as e:
+                self.logger.warning(f"Web database initialization failed: {e}")
+                self.logger.info("Service will continue without statistics tracking")
+                self.web_db = None
+
+            # Step 8: Perform initial library sync if needed
             await self._check_initial_sync()
 
-            # Step 8: Log successful initialization
+            # Step 9: Log successful initialization
             self.logger.info("=" * 60)
             self.logger.info("🚀 WebhookService initialization completed successfully!")
             self.logger.info("Service is ready to process Jellyfin webhooks")
@@ -378,6 +391,25 @@ class WebhookService:
             self.logger.debug(f"Could not retrieve last sync time: {e}")
             return None
 
+    async def _record_notification_stats(self, event_type: str, item_type: str = None, success: bool = True) -> None:
+        """
+        Record notification statistics to web database.
+        
+        Args:
+            event_type: Type of event (new, upgraded, deleted)
+            item_type: Type of media item (Movie, Episode, etc.)
+            success: Whether the notification was successful
+        """
+        if self.web_db is None:
+            return  # Stats tracking not available
+        
+        try:
+            await self.web_db.record_notification_event(event_type, item_type, success)
+            self.logger.debug(f"Recorded {event_type} notification stats for {item_type or 'unknown'}")
+        except Exception as e:
+            self.logger.debug(f"Failed to record notification stats: {e}")
+            # Don't fail the whole process just because stats recording failed
+
     async def process_webhook(self, payload: WebhookPayload) -> Dict[str, Any]:
         """
         Process incoming webhook from Jellyfin media server.
@@ -436,6 +468,10 @@ class WebhookService:
         start_time = time.time()
 
         try:
+            # Record that we received a webhook
+            if self.web_db:
+                await self.web_db.record_webhook_event("webhook_received", payload.ItemType)
+            
             self.logger.debug(f"Processing webhook for {payload.Name} ({payload.ItemType}) - Event: {payload.NotificationType}")
             
             # Handle ItemDeleted notifications
@@ -527,7 +563,14 @@ class WebhookService:
                             self.logger.error(f"Error enriching upgraded item with metadata: {e}")
                     
                     # Send upgrade notification with enriched item and metadata
-                    await self.discord.send_notification(enriched_item, "upgraded_item", changes, metadata=metadata)
+                    notification_result = await self.discord.send_notification(enriched_item, "upgraded_item", changes, metadata=metadata)
+                    
+                    # Record stats
+                    await self._record_notification_stats("upgraded", media_item.item_type, notification_result.get("success", False))
+                    
+                    # Record webhook processed
+                    if self.web_db:
+                        await self.web_db.record_webhook_event("webhook_processed", media_item.item_type)
 
                     return {
                         "status": "success",
@@ -545,6 +588,11 @@ class WebhookService:
                     # Convert MediaItem to DatabaseItem before saving
                     db_item = DatabaseItem.from_media_item(media_item)
                     await self.db.save_item(db_item)  # Update metadata
+                    
+                    # Record metadata-only update
+                    if self.web_db:
+                        await self.web_db.record_webhook_event("metadata_only", media_item.item_type)
+                        await self.web_db.record_webhook_event("webhook_processed", media_item.item_type)
 
                     return {
                         "status": "success",
@@ -577,7 +625,14 @@ class WebhookService:
                         # Continue without metadata if enrichment fails
 
                 # Send new item notification with metadata
-                await self.discord.send_notification(media_item, "new_item", metadata=metadata)
+                notification_result = await self.discord.send_notification(media_item, "new_item", metadata=metadata)
+                
+                # Record stats
+                await self._record_notification_stats("new", media_item.item_type, notification_result.get("success", False))
+                
+                # Record webhook processed
+                if self.web_db:
+                    await self.web_db.record_webhook_event("webhook_processed", media_item.item_type)
 
                 return {
                     "status": "success",
@@ -592,6 +647,11 @@ class WebhookService:
         except Exception as e:
             processing_time = time.time() - start_time
             self.logger.error(f"Error processing webhook for {payload.Name}: {e}", exc_info=True)
+            
+            # Record webhook failure
+            if self.web_db:
+                await self.web_db.record_webhook_event("webhook_failed", payload.ItemType)
+            
             return {
                 "status": "error",
                 "action": "processing_failed",
@@ -1794,6 +1854,11 @@ class WebhookService:
             if not self.deletion_cleanup_task or self.deletion_cleanup_task.done():
                 self.deletion_cleanup_task = asyncio.create_task(self._cleanup_old_deletions())
             
+            # Record that we filtered a deletion
+            if self.web_db:
+                await self.web_db.record_webhook_event("delete_filtered", payload.ItemType)
+                await self.web_db.record_webhook_event("webhook_processed", payload.ItemType)
+            
             return {
                 "status": "queued",
                 "action": "deletion_queued",
@@ -1872,6 +1937,12 @@ class WebhookService:
             # Convert MediaItem to DatabaseItem before saving
             db_item = DatabaseItem.from_media_item(new_item)
             await self.db.save_item(db_item)
+            
+            # Record that we filtered a rename
+            if self.web_db:
+                await self.web_db.record_webhook_event("rename_filtered", add_payload.ItemType)
+                await self.web_db.record_webhook_event("webhook_processed", add_payload.ItemType)
+            
             return {
                 "status": "filtered",
                 "action": "rename_filtered",
@@ -1954,7 +2025,11 @@ class WebhookService:
                     except Exception as e:
                         self.logger.error(f"Error enriching upgraded item with metadata: {e}")
                 
-                await self.discord.send_notification(enriched_item, "upgraded_item", changes, metadata=metadata)
+                notification_result = await self.discord.send_notification(enriched_item, "upgraded_item", changes, metadata=metadata)
+                
+                # Record stats
+                await self._record_notification_stats("upgraded", media_item.item_type, notification_result.get("success", False))
+                
                 return {
                     "status": "success",
                     "action": "upgraded_item",
@@ -1985,7 +2060,11 @@ class WebhookService:
                 except Exception as e:
                     self.logger.error(f"Error enriching item with metadata: {e}")
             
-            await self.discord.send_notification(media_item, "new_item", metadata=metadata)
+            notification_result = await self.discord.send_notification(media_item, "new_item", metadata=metadata)
+            
+            # Record stats
+            await self._record_notification_stats("new", media_item.item_type, notification_result.get("success", False))
+            
             return {
                 "status": "success",
                 "action": "new_item",
@@ -2032,7 +2111,14 @@ class WebhookService:
             )
             
             # Send deletion notification
-            await self.discord.send_notification(deleted_item, "deleted_item")
+            notification_result = await self.discord.send_notification(deleted_item, "deleted_item")
+            
+            # Record stats
+            await self._record_notification_stats("deleted", payload.ItemType, notification_result.get("success", False))
+            
+            # Record webhook processed
+            if self.web_db:
+                await self.web_db.record_webhook_event("webhook_processed", payload.ItemType)
             
             self.logger.info(f"Sent deletion notification for {payload.Name}")
             

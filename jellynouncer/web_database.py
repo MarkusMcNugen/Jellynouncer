@@ -60,17 +60,42 @@ class WebDatabaseManager:
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     hour_bucket TEXT,      -- For hourly aggregation (YYYY-MM-DD HH:00)
                     day_bucket TEXT,       -- For daily aggregation (YYYY-MM-DD)
+                    
+                    -- Webhook received stats
+                    webhooks_received INTEGER DEFAULT 0,
+                    webhooks_processed INTEGER DEFAULT 0,
+                    webhooks_failed INTEGER DEFAULT 0,
+                    
+                    -- Discord notification stats
                     notifications_sent INTEGER DEFAULT 0,
                     notifications_failed INTEGER DEFAULT 0,
+                    notifications_queued INTEGER DEFAULT 0,
+                    
+                    -- Event type stats
                     new_items INTEGER DEFAULT 0,
                     upgraded_items INTEGER DEFAULT 0,
                     deleted_items INTEGER DEFAULT 0,
+                    metadata_only_updates INTEGER DEFAULT 0,
+                    
+                    -- Filtering stats
+                    renames_filtered INTEGER DEFAULT 0,
+                    deletes_filtered INTEGER DEFAULT 0,
+                    mass_renames_caught INTEGER DEFAULT 0,
+                    
+                    -- Content type stats
                     movies INTEGER DEFAULT 0,
                     tv_shows INTEGER DEFAULT 0,
                     episodes INTEGER DEFAULT 0,
                     music INTEGER DEFAULT 0,
+                    
+                    -- Discord channel routing stats
+                    sent_to_default INTEGER DEFAULT 0,
+                    sent_to_movies INTEGER DEFAULT 0,
+                    sent_to_tv INTEGER DEFAULT 0,
+                    sent_to_music INTEGER DEFAULT 0,
+                    
+                    -- Performance stats
                     library_scans INTEGER DEFAULT 0,
-                    mass_renames_caught INTEGER DEFAULT 0,
                     avg_processing_time_ms REAL,
                     queue_size_max INTEGER DEFAULT 0
                 )
@@ -85,6 +110,32 @@ class WebDatabaseManager:
                 CREATE INDEX IF NOT EXISTS idx_notification_stats_day 
                 ON notification_stats(day_bucket)
             """)
+            
+            # Add new columns to existing table if they don't exist (migration)
+            cursor = conn.execute("PRAGMA table_info(notification_stats)")
+            existing_columns = {row[1] for row in cursor.fetchall()}
+            
+            new_columns = [
+                ("webhooks_received", "INTEGER DEFAULT 0"),
+                ("webhooks_processed", "INTEGER DEFAULT 0"),
+                ("webhooks_failed", "INTEGER DEFAULT 0"),
+                ("notifications_queued", "INTEGER DEFAULT 0"),
+                ("metadata_only_updates", "INTEGER DEFAULT 0"),
+                ("renames_filtered", "INTEGER DEFAULT 0"),
+                ("deletes_filtered", "INTEGER DEFAULT 0"),
+                ("sent_to_default", "INTEGER DEFAULT 0"),
+                ("sent_to_movies", "INTEGER DEFAULT 0"),
+                ("sent_to_tv", "INTEGER DEFAULT 0"),
+                ("sent_to_music", "INTEGER DEFAULT 0")
+            ]
+            
+            for column_name, column_def in new_columns:
+                if column_name not in existing_columns:
+                    try:
+                        conn.execute(f"ALTER TABLE notification_stats ADD COLUMN {column_name} {column_def}")
+                        logger.debug(f"Added column {column_name} to notification_stats table")
+                    except sqlite3.OperationalError:
+                        pass  # Column already exists
             
             conn.commit()
         
@@ -138,19 +189,32 @@ class WebDatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             
-            # Get hourly aggregated data
+            # Get hourly aggregated data with all new fields
             cursor = conn.execute("""
                 SELECT 
                     hour_bucket,
+                    SUM(webhooks_received) as webhooks_received,
+                    SUM(webhooks_processed) as webhooks_processed,
+                    SUM(webhooks_failed) as webhooks_failed,
                     SUM(notifications_sent) as sent,
                     SUM(notifications_failed) as failed,
+                    SUM(notifications_queued) as queued,
                     SUM(new_items) as new,
                     SUM(upgraded_items) as upgraded,
                     SUM(deleted_items) as deleted,
+                    SUM(metadata_only_updates) as metadata_only,
+                    SUM(renames_filtered) as renames_filtered,
+                    SUM(deletes_filtered) as deletes_filtered,
+                    SUM(mass_renames_caught) as mass_renames,
                     SUM(movies) as movies,
                     SUM(tv_shows) as tv_shows,
                     SUM(episodes) as episodes,
-                    SUM(music) as music
+                    SUM(music) as music,
+                    SUM(sent_to_default) as sent_default,
+                    SUM(sent_to_movies) as sent_movies,
+                    SUM(sent_to_tv) as sent_tv,
+                    SUM(sent_to_music) as sent_music,
+                    SUM(library_scans) as library_scans
                 FROM notification_stats
                 WHERE hour_bucket >= ?
                 GROUP BY hour_bucket
@@ -162,44 +226,83 @@ class WebDatabaseManager:
             for row in cursor.fetchall():
                 hourly_data.append({
                     "hour": row["hour_bucket"],
+                    "webhooks_received": row["webhooks_received"] or 0,
+                    "webhooks_processed": row["webhooks_processed"] or 0,
+                    "webhooks_failed": row["webhooks_failed"] or 0,
                     "sent": row["sent"] or 0,
                     "failed": row["failed"] or 0,
+                    "queued": row["queued"] or 0,
                     "new": row["new"] or 0,
                     "upgraded": row["upgraded"] or 0,
                     "deleted": row["deleted"] or 0,
+                    "metadata_only": row["metadata_only"] or 0,
+                    "renames_filtered": row["renames_filtered"] or 0,
+                    "deletes_filtered": row["deletes_filtered"] or 0,
+                    "mass_renames": row["mass_renames"] or 0,
                     "movies": row["movies"] or 0,
                     "tv_shows": row["tv_shows"] or 0,
                     "episodes": row["episodes"] or 0,
-                    "music": row["music"] or 0
+                    "music": row["music"] or 0,
+                    "sent_default": row["sent_default"] or 0,
+                    "sent_movies": row["sent_movies"] or 0,
+                    "sent_tv": row["sent_tv"] or 0,
+                    "sent_music": row["sent_music"] or 0,
+                    "library_scans": row["library_scans"] or 0
                 })
             
             # Get totals for the period
             cursor = conn.execute("""
                 SELECT 
+                    SUM(webhooks_received) as total_webhooks_received,
+                    SUM(webhooks_processed) as total_webhooks_processed,
+                    SUM(webhooks_failed) as total_webhooks_failed,
                     SUM(notifications_sent) as total_sent,
                     SUM(notifications_failed) as total_failed,
+                    SUM(notifications_queued) as total_queued,
                     SUM(new_items) as total_new,
                     SUM(upgraded_items) as total_upgraded,
                     SUM(deleted_items) as total_deleted,
+                    SUM(metadata_only_updates) as total_metadata_only,
+                    SUM(renames_filtered) as total_renames_filtered,
+                    SUM(deletes_filtered) as total_deletes_filtered,
+                    SUM(mass_renames_caught) as total_mass_renames,
                     SUM(movies) as total_movies,
                     SUM(tv_shows) as total_tv_shows,
                     SUM(episodes) as total_episodes,
-                    SUM(music) as total_music
+                    SUM(music) as total_music,
+                    SUM(sent_to_default) as total_sent_default,
+                    SUM(sent_to_movies) as total_sent_movies,
+                    SUM(sent_to_tv) as total_sent_tv,
+                    SUM(sent_to_music) as total_sent_music,
+                    SUM(library_scans) as total_library_scans
                 FROM notification_stats
                 WHERE timestamp >= ?
             """, (cutoff_time,))
             
             totals_row = cursor.fetchone()
             totals = {
+                "total_webhooks_received": totals_row["total_webhooks_received"] or 0 if totals_row else 0,
+                "total_webhooks_processed": totals_row["total_webhooks_processed"] or 0 if totals_row else 0,
+                "total_webhooks_failed": totals_row["total_webhooks_failed"] or 0 if totals_row else 0,
                 "total_sent": totals_row["total_sent"] or 0 if totals_row else 0,
                 "total_failed": totals_row["total_failed"] or 0 if totals_row else 0,
+                "total_queued": totals_row["total_queued"] or 0 if totals_row else 0,
                 "total_new": totals_row["total_new"] or 0 if totals_row else 0,
                 "total_upgraded": totals_row["total_upgraded"] or 0 if totals_row else 0,
                 "total_deleted": totals_row["total_deleted"] or 0 if totals_row else 0,
+                "total_metadata_only": totals_row["total_metadata_only"] or 0 if totals_row else 0,
+                "total_renames_filtered": totals_row["total_renames_filtered"] or 0 if totals_row else 0,
+                "total_deletes_filtered": totals_row["total_deletes_filtered"] or 0 if totals_row else 0,
+                "total_mass_renames": totals_row["total_mass_renames"] or 0 if totals_row else 0,
                 "total_movies": totals_row["total_movies"] or 0 if totals_row else 0,
                 "total_tv_shows": totals_row["total_tv_shows"] or 0 if totals_row else 0,
                 "total_episodes": totals_row["total_episodes"] or 0 if totals_row else 0,
-                "total_music": totals_row["total_music"] or 0 if totals_row else 0
+                "total_music": totals_row["total_music"] or 0 if totals_row else 0,
+                "total_sent_default": totals_row["total_sent_default"] or 0 if totals_row else 0,
+                "total_sent_movies": totals_row["total_sent_movies"] or 0 if totals_row else 0,
+                "total_sent_tv": totals_row["total_sent_tv"] or 0 if totals_row else 0,
+                "total_sent_music": totals_row["total_sent_music"] or 0 if totals_row else 0,
+                "total_library_scans": totals_row["total_library_scans"] or 0 if totals_row else 0
             }
         
         return {
@@ -208,8 +311,15 @@ class WebDatabaseManager:
             "period_hours": hours
         }
     
-    async def record_notification_event(self, event_type: str, item_type: str = None, success: bool = True):
-        """Record a notification event for statistics"""
+    async def record_webhook_event(self, event_type: str, item_type: str = None, **kwargs):
+        """
+        Record webhook and notification events for comprehensive statistics.
+        
+        Args:
+            event_type: Type of event (webhook_received, webhook_processed, notification_sent, etc.)
+            item_type: Media item type (Movie, Episode, etc.)
+            **kwargs: Additional event-specific data (channel, success, filtered_type, etc.)
+        """
         from datetime import datetime
         
         if not self.initialized:
@@ -219,21 +329,51 @@ class WebDatabaseManager:
         hour_bucket = now.strftime('%Y-%m-%d %H:00')
         day_bucket = now.strftime('%Y-%m-%d')
         
-        # Determine which columns to update
+        # Initialize update dictionary with time buckets
         updates = {
             "hour_bucket": hour_bucket,
-            "day_bucket": day_bucket,
-            "notifications_sent": 1 if success else 0,
-            "notifications_failed": 0 if success else 1
+            "day_bucket": day_bucket
         }
         
-        # Update type-specific counters
-        if event_type == "new":
+        # Handle different event types
+        if event_type == "webhook_received":
+            updates["webhooks_received"] = 1
+        elif event_type == "webhook_processed":
+            updates["webhooks_processed"] = 1
+        elif event_type == "webhook_failed":
+            updates["webhooks_failed"] = 1
+        elif event_type == "notification_sent":
+            updates["notifications_sent"] = 1
+            # Track channel routing
+            channel = kwargs.get("channel", "default")
+            if channel == "movies":
+                updates["sent_to_movies"] = 1
+            elif channel == "tv":
+                updates["sent_to_tv"] = 1
+            elif channel == "music":
+                updates["sent_to_music"] = 1
+            else:
+                updates["sent_to_default"] = 1
+        elif event_type == "notification_failed":
+            updates["notifications_failed"] = 1
+        elif event_type == "notification_queued":
+            updates["notifications_queued"] = 1
+        elif event_type == "new":
             updates["new_items"] = 1
         elif event_type == "upgraded":
             updates["upgraded_items"] = 1
         elif event_type == "deleted":
             updates["deleted_items"] = 1
+        elif event_type == "metadata_only":
+            updates["metadata_only_updates"] = 1
+        elif event_type == "rename_filtered":
+            updates["renames_filtered"] = 1
+        elif event_type == "delete_filtered":
+            updates["deletes_filtered"] = 1
+        elif event_type == "mass_rename_filtered":
+            updates["mass_renames_caught"] = 1
+        elif event_type == "library_scan":
+            updates["library_scans"] = 1
         
         # Update content type counters
         if item_type:
@@ -252,26 +392,52 @@ class WebDatabaseManager:
             # Try to update existing record first
             cursor = conn.execute("""
                 UPDATE notification_stats
-                SET notifications_sent = notifications_sent + ?,
+                SET webhooks_received = webhooks_received + ?,
+                    webhooks_processed = webhooks_processed + ?,
+                    webhooks_failed = webhooks_failed + ?,
+                    notifications_sent = notifications_sent + ?,
                     notifications_failed = notifications_failed + ?,
+                    notifications_queued = notifications_queued + ?,
                     new_items = new_items + ?,
                     upgraded_items = upgraded_items + ?,
                     deleted_items = deleted_items + ?,
+                    metadata_only_updates = metadata_only_updates + ?,
+                    renames_filtered = renames_filtered + ?,
+                    deletes_filtered = deletes_filtered + ?,
+                    mass_renames_caught = mass_renames_caught + ?,
                     movies = movies + ?,
                     tv_shows = tv_shows + ?,
                     episodes = episodes + ?,
-                    music = music + ?
+                    music = music + ?,
+                    sent_to_default = sent_to_default + ?,
+                    sent_to_movies = sent_to_movies + ?,
+                    sent_to_tv = sent_to_tv + ?,
+                    sent_to_music = sent_to_music + ?,
+                    library_scans = library_scans + ?
                 WHERE hour_bucket = ?
             """, (
+                updates.get("webhooks_received", 0),
+                updates.get("webhooks_processed", 0),
+                updates.get("webhooks_failed", 0),
                 updates.get("notifications_sent", 0),
                 updates.get("notifications_failed", 0),
+                updates.get("notifications_queued", 0),
                 updates.get("new_items", 0),
                 updates.get("upgraded_items", 0),
                 updates.get("deleted_items", 0),
+                updates.get("metadata_only_updates", 0),
+                updates.get("renames_filtered", 0),
+                updates.get("deletes_filtered", 0),
+                updates.get("mass_renames_caught", 0),
                 updates.get("movies", 0),
                 updates.get("tv_shows", 0),
                 updates.get("episodes", 0),
                 updates.get("music", 0),
+                updates.get("sent_to_default", 0),
+                updates.get("sent_to_movies", 0),
+                updates.get("sent_to_tv", 0),
+                updates.get("sent_to_music", 0),
+                updates.get("library_scans", 0),
                 hour_bucket
             ))
             
@@ -279,21 +445,54 @@ class WebDatabaseManager:
             if cursor.rowcount == 0:
                 conn.execute("""
                     INSERT INTO notification_stats (
-                        hour_bucket, day_bucket, notifications_sent, notifications_failed,
-                        new_items, upgraded_items, deleted_items,
-                        movies, tv_shows, episodes, music
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        hour_bucket, day_bucket, 
+                        webhooks_received, webhooks_processed, webhooks_failed,
+                        notifications_sent, notifications_failed, notifications_queued,
+                        new_items, upgraded_items, deleted_items, metadata_only_updates,
+                        renames_filtered, deletes_filtered, mass_renames_caught,
+                        movies, tv_shows, episodes, music,
+                        sent_to_default, sent_to_movies, sent_to_tv, sent_to_music,
+                        library_scans
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     hour_bucket, day_bucket,
+                    updates.get("webhooks_received", 0),
+                    updates.get("webhooks_processed", 0),
+                    updates.get("webhooks_failed", 0),
                     updates.get("notifications_sent", 0),
                     updates.get("notifications_failed", 0),
+                    updates.get("notifications_queued", 0),
                     updates.get("new_items", 0),
                     updates.get("upgraded_items", 0),
                     updates.get("deleted_items", 0),
+                    updates.get("metadata_only_updates", 0),
+                    updates.get("renames_filtered", 0),
+                    updates.get("deletes_filtered", 0),
+                    updates.get("mass_renames_caught", 0),
                     updates.get("movies", 0),
                     updates.get("tv_shows", 0),
                     updates.get("episodes", 0),
-                    updates.get("music", 0)
+                    updates.get("music", 0),
+                    updates.get("sent_to_default", 0),
+                    updates.get("sent_to_movies", 0),
+                    updates.get("sent_to_tv", 0),
+                    updates.get("sent_to_music", 0),
+                    updates.get("library_scans", 0)
                 ))
             
             conn.commit()
+    
+    async def record_notification_event(self, event_type: str, item_type: str = None, success: bool = True):
+        """
+        Legacy method for backward compatibility.
+        Redirects to the new record_webhook_event method.
+        """
+        # Map old event types to new ones
+        if success:
+            await self.record_webhook_event("notification_sent", item_type)
+        else:
+            await self.record_webhook_event("notification_failed", item_type)
+        
+        # Also record the event type
+        if event_type in ["new", "upgraded", "deleted"]:
+            await self.record_webhook_event(event_type, item_type)

@@ -1033,7 +1033,41 @@ class WebInterfaceService:
                 "memory_usage": 0,
                 "disk_usage": 0
             },
-            "jellyfin_stats": None  # Will be populated from database
+            "jellyfin_stats": None,  # Will be populated from database
+            "synced_items": {
+                "total": 0,
+                "by_type": {},
+                "database_size_mb": 0
+            },
+            "webhook_stats": {
+                "received": 0,
+                "processed": 0,
+                "failed": 0,
+                "processing_rate": 0.0
+            },
+            "notification_stats": {
+                "sent": 0,
+                "failed": 0,
+                "queued": 0,
+                "success_rate": 0.0
+            },
+            "filtering_stats": {
+                "renames_filtered": 0,
+                "deletes_filtered": 0,
+                "mass_renames_caught": 0,
+                "metadata_only": 0
+            },
+            "channel_routing": {
+                "default": 0,
+                "movies": 0,
+                "tv": 0,
+                "music": 0
+            },
+            "historical_stats": {
+                "hourly": [],
+                "totals": {},
+                "period_hours": 24
+            }
         }
         
         # System metrics
@@ -1063,24 +1097,77 @@ class WebInterfaceService:
         
         # Get Jellyfin stats from database
         try:
+            jellyfin_stats = None
             if self.db:
                 jellyfin_stats = await self.db.get_latest_jellyfin_stats()
             elif self.webhook_service and self.webhook_service.db:
                 jellyfin_stats = await self.webhook_service.db.get_latest_jellyfin_stats()
-                if jellyfin_stats:
-                    # Check if stats are stale (older than 1 hour)
-                    if 'last_check' in jellyfin_stats:
-                        last_check = datetime.fromisoformat(jellyfin_stats['last_check'])
-                        if (datetime.now(timezone.utc) - last_check).total_seconds() > 3600:
-                            # Refresh stats in background
-                            asyncio.create_task(self.refresh_jellyfin_stats())
-                    
-                    stats["jellyfin_stats"] = jellyfin_stats
-                else:
-                    # No stats in database, trigger refresh
-                    asyncio.create_task(self.refresh_jellyfin_stats())
+            
+            if jellyfin_stats:
+                # Check if stats are stale (older than 1 hour)
+                if 'last_check' in jellyfin_stats:
+                    last_check = datetime.fromisoformat(jellyfin_stats['last_check'])
+                    if (datetime.now(timezone.utc) - last_check).total_seconds() > 3600:
+                        # Refresh stats in background
+                        asyncio.create_task(self.refresh_jellyfin_stats())
+                
+                stats["jellyfin_stats"] = jellyfin_stats
+            else:
+                # No stats in database, trigger refresh and provide defaults
+                asyncio.create_task(self.refresh_jellyfin_stats())
+                # Provide default structure for Jellyfin stats
+                stats["jellyfin_stats"] = {
+                    "server_name": "Unknown",
+                    "server_version": "Unknown",
+                    "server_id": None,
+                    "server_status": "unknown",
+                    "total_users": 0,
+                    "active_users": 0,
+                    "total_items": 0,
+                    "movie_count": 0,
+                    "series_count": 0,
+                    "episode_count": 0,
+                    "music_count": 0,
+                    "music_album_count": 0,
+                    "photo_count": 0,
+                    "book_count": 0,
+                    "total_size_gb": 0,
+                    "total_play_count": 0,
+                    "total_watch_time_minutes": 0,
+                    "library_stats": {},
+                    "plugin_stats": {},
+                    "system_info": {},
+                    "last_check": None,
+                    "last_error": None
+                }
         except Exception as e:
             self.logger.warning(f"Could not get Jellyfin stats: {e}")
+            # Provide default Jellyfin stats structure on error
+            if not stats.get("jellyfin_stats"):
+                stats["jellyfin_stats"] = {
+                    "server_name": "Error",
+                    "server_version": "Unknown",
+                    "server_id": None,
+                    "server_status": "error",
+                    "total_users": 0,
+                    "active_users": 0,
+                    "total_items": 0,
+                    "movie_count": 0,
+                    "series_count": 0,
+                    "episode_count": 0,
+                    "music_count": 0,
+                    "music_album_count": 0,
+                    "photo_count": 0,
+                    "book_count": 0,
+                    "total_size_gb": 0,
+                    "total_play_count": 0,
+                    "total_watch_time_minutes": 0,
+                    "library_stats": {},
+                    "plugin_stats": {},
+                    "system_info": {},
+                    "last_check": None,
+                    "last_error": str(e)
+                }
         
         # Get historical statistics from web database
         self.logger.debug("Fetching historical notification stats...")
@@ -1092,28 +1179,67 @@ class WebInterfaceService:
             # Update totals with historical data if available
             if historical_stats.get("totals"):
                 totals = historical_stats["totals"]
+                
+                # Webhook and notification statistics
+                stats["webhook_stats"] = {
+                    "received": totals.get("total_webhooks_received", 0),
+                    "processed": totals.get("total_webhooks_processed", 0),
+                    "failed": totals.get("total_webhooks_failed", 0),
+                    "processing_rate": round((totals.get("total_webhooks_processed", 0) / max(totals.get("total_webhooks_received", 1), 1)) * 100, 1)
+                }
+                
+                stats["notification_stats"] = {
+                    "sent": totals.get("total_sent", 0),
+                    "failed": totals.get("total_failed", 0),
+                    "queued": totals.get("total_queued", 0),
+                    "success_rate": round((totals.get("total_sent", 0) / max(totals.get("total_sent", 0) + totals.get("total_failed", 0), 1)) * 100, 1)
+                }
+                
+                stats["filtering_stats"] = {
+                    "renames_filtered": totals.get("total_renames_filtered", 0),
+                    "deletes_filtered": totals.get("total_deletes_filtered", 0),
+                    "mass_renames_caught": totals.get("total_mass_renames", 0),
+                    "metadata_only": totals.get("total_metadata_only", 0)
+                }
+                
+                stats["channel_routing"] = {
+                    "default": totals.get("total_sent_default", 0),
+                    "movies": totals.get("total_sent_movies", 0),
+                    "tv": totals.get("total_sent_tv", 0),
+                    "music": totals.get("total_sent_music", 0)
+                }
+                
+                # Legacy fields for compatibility
                 stats["total_items"] = totals.get("total_sent", 0)
-                # Ensure we handle None values properly
                 new_items = totals.get("total_new") or 0
                 upgraded_items = totals.get("total_upgraded") or 0
                 stats["items_today"] = new_items + upgraded_items
                 self.logger.debug(f"Stats from historical data: total_items={stats['total_items']}, items_today={stats['items_today']}")
             else:
                 self.logger.debug("No historical totals available, using defaults")
+                # Defaults are already set in the initial stats dictionary
         except Exception as e:
             self.logger.error(f"Error getting historical stats: {e}", exc_info=True)
-            stats["historical_stats"] = {"hourly": [], "totals": {}, "period_hours": 24}
+            # Keep defaults that were already set
         
         # Get statistics from main database if webhook service is available
         if self.db or (self.webhook_service and hasattr(self.webhook_service, 'db') and self.webhook_service.db):
             try:
+                # Get comprehensive database stats
                 if self.db:
-                    db_stats = await self.db.get_statistics()
+                    db_stats = await self.db.get_stats()
                 else:
-                    db_stats = await self.webhook_service.db.get_statistics()
+                    db_stats = await self.webhook_service.db.get_stats()
+                
+                # Store synced items information
+                stats["synced_items"] = {
+                    "total": db_stats.get("total_items", 0),
+                    "by_type": db_stats.get("item_counts", {}),
+                    "database_size_mb": db_stats.get("db_size_mb", 0)
+                }
+                
+                # Also update legacy fields for compatibility
                 stats["total_items"] = db_stats.get("total_items", 0)
-                stats["items_today"] = db_stats.get("items_added_today", 0)
-                stats["items_week"] = db_stats.get("items_added_week", 0)
                 
                 # Get recent notifications
                 if self.db:
@@ -1143,10 +1269,12 @@ class WebInterfaceService:
             except Exception as e:
                 self.logger.error(f"Failed to get database statistics: {e}")
                 stats["system_health"]["database"] = "error"
+                # Keep default values for synced_items that were already set
         else:
             # Running in standalone mode without webhook service
             self.logger.debug("Running in standalone mode - limited statistics available")
             stats["system_health"]["webhook_service"] = "not available (standalone mode)"
+            # Keep all default values that were already set
         
         self.logger.debug(f"Returning overview stats: total_items={stats.get('total_items', 0)}, items_today={stats.get('items_today', 0)}, has_historical={bool(stats.get('historical_stats'))}")
         return OverviewStats(**stats)

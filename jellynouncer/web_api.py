@@ -55,6 +55,8 @@ import bcrypt
 from jellynouncer.config_models import ConfigurationValidator
 from jellynouncer.utils import get_web_logger, setup_web_logging, setup_logging, get_logger
 from jellynouncer.webhook_service import WebhookService
+from jellynouncer.jellyfin_api import JellyfinAPI
+from jellynouncer.database_manager import DatabaseManager
 from jellynouncer.ssl_manager import SSLManager, setup_ssl_routes
 from jellynouncer.security_middleware import setup_security_middleware
 
@@ -848,6 +850,8 @@ class WebInterfaceService:
     def __init__(self, webhook_service: Optional[WebhookService] = None):
         self.webhook_service = webhook_service
         self.config = None
+        self.jellyfin = None  # Own Jellyfin client for web interface
+        self.db = None  # Own database connection for web interface
         self.web_db = WebDatabaseManager()
         self.ssl_manager = SSLManager(WEB_DB_PATH)
         self.logger = get_web_logger("jellynouncer.web_interface")
@@ -885,6 +889,29 @@ class WebInterfaceService:
             self.ssl_manager = SSLManager(ssl_config=ssl_config_obj, db_path=WEB_DB_PATH)
             await self.ssl_manager.initialize()
             self.logger.debug("SSL manager initialized successfully")
+            
+            # Initialize Jellyfin API client
+            self.logger.debug("Initializing Jellyfin API client...")
+            try:
+                self.jellyfin = JellyfinAPI(self.config.jellyfin)
+                if await self.jellyfin.connect():
+                    self.logger.info("Connected to Jellyfin API successfully")
+                else:
+                    self.logger.warning("Failed to connect to Jellyfin API - stats will be limited")
+            except Exception as e:
+                self.logger.warning(f"Jellyfin API initialization failed: {e} - stats will be limited")
+                self.jellyfin = None
+            
+            # Initialize main database connection
+            self.logger.debug("Initializing main database connection...")
+            try:
+                self.db = DatabaseManager(self.config.database)
+                await self.db.initialize()
+                self.logger.info("Connected to main database successfully")
+            except Exception as e:
+                self.logger.warning(f"Main database initialization failed: {e} - some features will be limited")
+                self.db = None
+                
         except Exception as e:
             self.logger.error(f"Failed to load configuration: {e}", exc_info=True)
             raise
@@ -928,9 +955,27 @@ class WebInterfaceService:
             Latest statistics dictionary
         """
         try:
-            # Get Jellyfin stats if webhook service is available
-            if self.webhook_service and self.webhook_service.jellyfin:
-                self.logger.debug("Fetching stats from Jellyfin server...")
+            # Use web interface's own Jellyfin client first
+            if self.jellyfin:
+                self.logger.debug("Fetching stats from Jellyfin server using web interface client...")
+                stats = await self.jellyfin.get_server_stats()
+                self.logger.debug(f"Retrieved Jellyfin stats: {len(stats)} fields")
+                
+                # Save to database
+                if self.db:
+                    self.logger.debug("Saving stats to database...")
+                    await self.db.save_jellyfin_stats(stats)
+                    self.logger.info(f"Jellyfin stats saved to database successfully")
+                elif self.webhook_service and self.webhook_service.db:
+                    self.logger.debug("Saving stats to webhook service database...")
+                    await self.webhook_service.db.save_jellyfin_stats(stats)
+                else:
+                    self.logger.warning("Database not available to save Jellyfin stats")
+                
+                return stats
+            # Fall back to webhook service if available
+            elif self.webhook_service and self.webhook_service.jellyfin:
+                self.logger.debug("Fetching stats from Jellyfin server via webhook service...")
                 stats = await self.webhook_service.jellyfin.get_server_stats()
                 self.logger.debug(f"Retrieved Jellyfin stats: {len(stats)} fields")
                 
@@ -939,15 +984,16 @@ class WebInterfaceService:
                     self.logger.debug("Saving stats to database...")
                     await self.webhook_service.db.save_jellyfin_stats(stats)
                     self.logger.info(f"Jellyfin stats saved to database successfully")
-                else:
-                    self.logger.warning("Database not available to save Jellyfin stats")
                 
                 return stats
             else:
-                self.logger.warning(f"Cannot fetch Jellyfin stats - webhook_service: {self.webhook_service is not None}, jellyfin: {self.webhook_service.jellyfin if self.webhook_service else None}")
+                self.logger.warning(f"Cannot fetch Jellyfin stats - jellyfin: {self.jellyfin is not None}, webhook_service: {self.webhook_service is not None}")
                 # Try to get from database
-                if self.webhook_service and self.webhook_service.db:
+                if self.db:
                     self.logger.debug("Fetching cached stats from database...")
+                    return await self.db.get_latest_jellyfin_stats()
+                elif self.webhook_service and self.webhook_service.db:
+                    self.logger.debug("Fetching cached stats from webhook service database...")
                     return await self.webhook_service.db.get_latest_jellyfin_stats()
                 
             return {}
@@ -977,6 +1023,7 @@ class WebInterfaceService:
             },
             "system_health": {
                 "webhook_service": "running" if self.webhook_service else "stopped",
+                "jellyfin_connection": "connected" if self.jellyfin else "disconnected",
                 "database": "connected",
                 "last_sync": None,
                 "database_size_mb": 0,
@@ -1016,7 +1063,9 @@ class WebInterfaceService:
         
         # Get Jellyfin stats from database
         try:
-            if self.webhook_service and self.webhook_service.db:
+            if self.db:
+                jellyfin_stats = await self.db.get_latest_jellyfin_stats()
+            elif self.webhook_service and self.webhook_service.db:
                 jellyfin_stats = await self.webhook_service.db.get_latest_jellyfin_stats()
                 if jellyfin_stats:
                     # Check if stats are stale (older than 1 hour)
@@ -1056,15 +1105,21 @@ class WebInterfaceService:
             stats["historical_stats"] = {"hourly": [], "totals": {}, "period_hours": 24}
         
         # Get statistics from main database if webhook service is available
-        if self.webhook_service and hasattr(self.webhook_service, 'db') and self.webhook_service.db:
+        if self.db or (self.webhook_service and hasattr(self.webhook_service, 'db') and self.webhook_service.db):
             try:
-                db_stats = await self.webhook_service.db.get_statistics()
+                if self.db:
+                    db_stats = await self.db.get_statistics()
+                else:
+                    db_stats = await self.webhook_service.db.get_statistics()
                 stats["total_items"] = db_stats.get("total_items", 0)
                 stats["items_today"] = db_stats.get("items_added_today", 0)
                 stats["items_week"] = db_stats.get("items_added_week", 0)
                 
                 # Get recent notifications
-                recent = await self.webhook_service.db.get_recent_changes(limit=10)
+                if self.db:
+                    recent = await self.db.get_recent_changes(limit=10)
+                else:
+                    recent = await self.webhook_service.db.get_recent_changes(limit=10)
                 stats["recent_notifications"] = [
                     {
                         "id": item.get("id"),

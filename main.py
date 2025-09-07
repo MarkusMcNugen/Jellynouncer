@@ -51,6 +51,7 @@ class ServiceLauncher:
         self.web_process: Optional[Process] = None
         self.logger = None  # Will be initialized after setup_logging
         self.running = False
+        self.single_service_mode = False  # Track if running single service
         
     def start_webhook_service(self):
         """Start the webhook service in a separate process"""
@@ -140,6 +141,13 @@ class ServiceLauncher:
         """Shutdown both services gracefully"""
         self.running = False
         
+        # In single service mode, the service runs in the main process
+        # so we don't need to terminate subprocesses
+        if self.single_service_mode:
+            if self.logger:
+                self.logger.info("Shutting down single service mode...")
+            return
+        
         if self.webhook_process and self.webhook_process.is_alive():
             if self.logger:
                 self.logger.info("Stopping webhook service...")
@@ -190,6 +198,9 @@ class ServiceLauncher:
             config = config_validator.load_and_validate_config()
             run_mode = os.environ.get("JELLYNOUNCER_RUN_MODE", config.server.run_mode).lower()
             
+            self.logger.info(f"Run mode determined: '{run_mode}'")
+            self.logger.info(f"Web interface enabled: {config.web_interface.enabled}")
+            
             if run_mode in ["all", "both"]:
                 # Start both services
                 self.webhook_process = Process(target=self.start_webhook_service)
@@ -222,11 +233,13 @@ class ServiceLauncher:
             elif run_mode == "webhook":
                 # Run only webhook service
                 self.logger.info("Running webhook service only")
+                self.single_service_mode = True
                 self.start_webhook_service()
                 
             elif run_mode == "web":
                 # Run only web interface
                 self.logger.info("Running web interface only")
+                self.single_service_mode = True
                 self.start_web_service()
                 
             else:

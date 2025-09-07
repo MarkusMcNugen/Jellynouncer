@@ -67,7 +67,7 @@ Dependencies:
 
 Author: Mark Newton
 Project: Jellynouncer
-Version: 2.0.0
+Version: 1.0.0
 License: MIT
 """
 
@@ -244,7 +244,7 @@ async def lifespan(app_instance: FastAPI):
 app = FastAPI(
     title="Jellynouncer",
     description="Intermediary Discord webhook service for Jellyfin media notifications",
-    version="2.0.0",
+    version="1.0.0",
     lifespan=lifespan
 )
 
@@ -687,7 +687,7 @@ async def service_statistics():
         stats["timestamp"] = datetime.now(timezone.utc).isoformat()
         stats["service_info"] = {
             "name": "Jellynouncer",
-            "version": "2.0.0",
+            "version": "1.0.0",
             "author": "Mark Newton"
         }
 

@@ -523,7 +523,7 @@ const Config = () => {
                           onChange={(e) => handleWebhookChange(key, 'enabled', e.target.checked)}
                           className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                         />
-                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Enabled</span>
+                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Enabled </span>
                         <Tooltip text={configDescriptions.discord.webhooks[key]?.enabled || configDescriptions.discord.webhooks.default.enabled} />
                       </label>
                       <button
@@ -601,7 +601,7 @@ const Config = () => {
                         />
                         <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                           {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </span>
+                        </span> 
                         <Tooltip text={configDescriptions.notifications.watch_changes[key]} />
                       </label>
                     </div>
@@ -644,7 +644,7 @@ const Config = () => {
                       onChange={(e) => handleInputChange('notifications', 'filter_renames', e.target.checked)}
                       className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                     />
-                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Filter Renames</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Filter Renames </span>
                     <Tooltip text={configDescriptions.notifications.filter_renames} />
                   </label>
                   <label className="inline-flex items-center">
@@ -654,7 +654,7 @@ const Config = () => {
                       onChange={(e) => handleInputChange('notifications', 'filter_deletes', e.target.checked)}
                       className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                     />
-                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Filter Deletes</span>
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Filter Deletes </span>
                     <Tooltip text={configDescriptions.notifications.filter_deletes} />
                   </label>
                 </div>
@@ -675,7 +675,7 @@ const Config = () => {
                   />
                   <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                     Enable Metadata Services
-                  </span>
+                  </span> 
                   <Tooltip text={configDescriptions.metadata_services.enabled} />
                 </label>
               </div>
@@ -692,7 +692,7 @@ const Config = () => {
                         onChange={(e) => handleInputChange('metadata_services', 'omdb', e.target.checked, 'enabled')}
                         className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                       />
-                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Enabled</span>
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Enabled </span>
                       <Tooltip text={configDescriptions.metadata_services.omdb.enabled} />
                     </label>
                   </div>
@@ -949,7 +949,7 @@ const Config = () => {
                     />
                     <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Enable Web Interface
-                    </span>
+                    </span> 
                     <Tooltip text={configDescriptions.web_interface.enabled} />
                   </label>
                 </div>
@@ -982,7 +982,7 @@ const Config = () => {
                     />
                     <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Require Web Interface Authentication
-                    </span>
+                    </span> 
                     <Tooltip text={configDescriptions.web_interface.auth_enabled} />
                   </label>
                 </div>
@@ -997,7 +997,7 @@ const Config = () => {
                     />
                     <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Require Webhook Authentication
-                    </span>
+                    </span> 
                     <Tooltip text={configDescriptions.web_interface.require_webhook_auth} />
                   </label>
                   {config.web_interface.require_webhook_auth && (
@@ -1123,7 +1123,7 @@ const Config = () => {
                   />
                   <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                     Enable WAL Mode (Write-Ahead Logging)
-                  </span>
+                  </span> 
                   <Tooltip text={configDescriptions.database.wal_mode} />
                 </label>
               </div>
@@ -1194,7 +1194,7 @@ const Config = () => {
                   />
                   <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                     Enable SSL/HTTPS
-                  </span>
+                  </span> 
                   <Tooltip text={configDescriptions.ssl.enabled} />
                 </label>
               </div>

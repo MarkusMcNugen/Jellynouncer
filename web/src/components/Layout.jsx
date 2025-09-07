@@ -7,7 +7,7 @@ import AuthSetup from './AuthSetup';
 import PasswordReset from './PasswordReset';
 import { Icon, IconDuotone, IconLight } from './FontAwesomeIcon';
 import logger from '../services/logger';
-import packageJson from '../../../package.json';
+import packageJson from '../../package.json';
 
 const Layout = () => {
   logger.info('[Layout] Component initialization started');

@@ -6,6 +6,7 @@ import Overview from './pages/Overview'
 import Config from './pages/Config'
 import Templates from './pages/Templates'
 import Logs from './pages/Logs'
+import Notifications from './pages/Notifications'
 import { useEffect, useState } from 'react'
 import logger from './services/logger'
 import RouteLogger from './components/RouteLogger'
@@ -16,6 +17,7 @@ const LoggedOverview = withLifecycleLogging(Overview, 'Overview');
 const LoggedConfig = withLifecycleLogging(Config, 'Config');
 const LoggedTemplates = withLifecycleLogging(Templates, 'Templates');
 const LoggedLogs = withLifecycleLogging(Logs, 'Logs');
+const LoggedNotifications = withLifecycleLogging(Notifications, 'Notifications');
 const LoggedLayout = withLifecycleLogging(Layout, 'Layout');
 
 function App() {
@@ -143,6 +145,7 @@ function App() {
           <Route path="config" element={<LoggedConfig />} />
           <Route path="templates" element={<LoggedTemplates />} />
           <Route path="logs" element={<LoggedLogs />} />
+          <Route path="notifications" element={<LoggedNotifications />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -242,21 +243,21 @@ const Overview = () => {
     datasets: [
       {
         label: 'Webhooks Received',
-        data: historicalData.map(h => h.webhooks_received || 0).reverse(),
+        data: historicalData.map(h => h.webhooks_received || h.new_items || 0).reverse(),
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         tension: 0.3,
       },
       {
         label: 'Notifications Sent',
-        data: historicalData.map(h => h.sent || 0).reverse(),
+        data: historicalData.map(h => h.sent || h.notifications_sent || 0).reverse(),
         borderColor: 'rgb(34, 197, 94)',
         backgroundColor: 'rgba(34, 197, 94, 0.1)',
         tension: 0.3,
       },
       {
         label: 'Failed',
-        data: historicalData.map(h => (h.webhooks_failed || 0) + (h.failed || 0)).reverse(),
+        data: historicalData.map(h => (h.webhooks_failed || 0) + (h.failed || h.notifications_failed || 0)).reverse(),
         borderColor: 'rgb(239, 68, 68)',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         tension: 0.3,
@@ -272,8 +273,8 @@ const Overview = () => {
       {
         data: [
           contentStats.total_movies || 0,
-          contentStats.total_tv_shows || 0,
-          contentStats.total_episodes || 0,
+          contentStats.total_tv_shows || contentStats.total_tv || 0,
+          contentStats.total_episodes || contentStats.total_new || 0,
           contentStats.total_music || 0,
         ],
         backgroundColor: [
@@ -823,46 +824,76 @@ const Overview = () => {
                 Processing Summary
               </h3>
               <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">New Items</span>
-                    <span className="text-sm font-medium">{stats?.historical_stats?.totals?.total_new || 0}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div className="bg-green-600 h-2 rounded-full" style={Object.assign({}, {width: '45%'})}></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Upgraded</span>
-                    <span className="text-sm font-medium">{stats?.historical_stats?.totals?.total_upgraded || 0}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div className="bg-blue-600 h-2 rounded-full" style={Object.assign({}, {width: '30%'})}></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Deleted</span>
-                    <span className="text-sm font-medium">{stats?.historical_stats?.totals?.total_deleted || 0}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div className="bg-red-600 h-2 rounded-full" style={Object.assign({}, {width: '15%'})}></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Filtered</span>
-                    <span className="text-sm font-medium">
-                      {(stats?.filtering_stats?.renames_filtered || 0) +
-                       (stats?.filtering_stats?.deletes_filtered || 0) +
-                       (stats?.filtering_stats?.metadata_only || 0)}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div className="bg-yellow-600 h-2 rounded-full" style={Object.assign({}, {width: '10%'})}></div>
-                  </div>
-                </div>
+                {(() => {
+                  // Calculate totals for percentage bars
+                  const newItems = stats?.historical_stats?.totals?.total_new || 0;
+                  const upgradedItems = stats?.historical_stats?.totals?.total_upgraded || 0;
+                  const deletedItems = stats?.historical_stats?.totals?.total_deleted || 0;
+                  const filteredItems = (stats?.filtering_stats?.renames_filtered || 0) +
+                                       (stats?.filtering_stats?.deletes_filtered || 0) +
+                                       (stats?.filtering_stats?.metadata_only || 0);
+                  
+                  const totalProcessed = newItems + upgradedItems + deletedItems + filteredItems;
+                  
+                  // Calculate percentages (avoid division by zero)
+                  const newPercent = totalProcessed > 0 ? (newItems / totalProcessed) * 100 : 0;
+                  const upgradedPercent = totalProcessed > 0 ? (upgradedItems / totalProcessed) * 100 : 0;
+                  const deletedPercent = totalProcessed > 0 ? (deletedItems / totalProcessed) * 100 : 0;
+                  const filteredPercent = totalProcessed > 0 ? (filteredItems / totalProcessed) * 100 : 0;
+                  
+                  return (
+                    <>
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">New Items</span>
+                          <span className="text-sm font-medium">{newItems}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          {newItems > 0 && (
+                            <div className="bg-green-600 h-2 rounded-full transition-all duration-500" 
+                                 style={Object.assign({}, {width: `${newPercent}%`})}></div>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Upgraded</span>
+                          <span className="text-sm font-medium">{upgradedItems}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          {upgradedItems > 0 && (
+                            <div className="bg-blue-600 h-2 rounded-full transition-all duration-500" 
+                                 style={Object.assign({}, {width: `${upgradedPercent}%`})}></div>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Deleted</span>
+                          <span className="text-sm font-medium">{deletedItems}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          {deletedItems > 0 && (
+                            <div className="bg-red-600 h-2 rounded-full transition-all duration-500" 
+                                 style={Object.assign({}, {width: `${deletedPercent}%`})}></div>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Filtered</span>
+                          <span className="text-sm font-medium">{filteredItems}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          {filteredItems > 0 && (
+                            <div className="bg-yellow-600 h-2 rounded-full transition-all duration-500" 
+                                 style={Object.assign({}, {width: `${filteredPercent}%`})}></div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -1053,7 +1084,65 @@ const Overview = () => {
                                     <span>Message sent</span>
                                   </div>
                                 )}
+                                
+                                {/* Discord Webhook Channel - Show which channel received it */}
+                                {notification.discord_webhook && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="message-dots" className="mr-2" size="sm" />
+                                    <span className="font-medium">
+                                      {notification.discord_webhook.includes('movies') ? '🎬 Movies' :
+                                       notification.discord_webhook.includes('tv') ? '📺 TV Shows' :
+                                       notification.discord_webhook.includes('music') ? '🎵 Music' :
+                                       '📢 Default'} Channel
+                                    </span>
+                                  </div>
+                                )}
+                                
+                                {/* Processing Time - Highlight if slow */}
+                                {notification.processing_time_ms && (
+                                  <div className="flex items-center text-gray-600 dark:text-gray-400">
+                                    <Icon icon="bolt" className="mr-2" size="sm" />
+                                    <span className={notification.processing_time_ms > 1000 ? 'text-yellow-600 dark:text-yellow-400 font-medium' : ''}>
+                                      ⚡ {notification.processing_time_ms}ms
+                                    </span>
+                                  </div>
+                                )}
                               </div>
+                              
+                              {/* Error Message for Failed Notifications */}
+                              {notification.status === 'failed' && notification.error_message && (
+                                <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                                  <div className="flex items-start">
+                                    <Icon icon="circle-exclamation" className="text-red-500 mr-2 mt-0.5 flex-shrink-0" size="sm" />
+                                    <p className="text-sm text-red-700 dark:text-red-300">
+                                      <span className="font-medium">Error: </span>
+                                      {notification.error_message}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Upgrade Changes - Show what was upgraded */}
+                              {notification.event === 'upgraded' && notification.metadata?.changes && (
+                                <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                                  <div className="flex items-start">
+                                    <Icon icon="arrow-trend-up" className="text-blue-500 mr-2 mt-0.5 flex-shrink-0" size="sm" />
+                                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                                      <span className="font-medium">Quality Improvements:</span>
+                                      <ul className="mt-1 space-y-0.5">
+                                        {Object.entries(notification.metadata.changes).map(([key, value]) => (
+                                          <li key={key} className="flex items-center">
+                                            <span className="text-blue-600 dark:text-blue-400 mr-2">•</span>
+                                            <span className="capitalize">
+                                              {key.replace(/_/g, ' ')}: <span className="font-medium">{value}</span>
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                               
                               {/* Overview if available */}
                               {notification.overview && (
@@ -1091,6 +1180,18 @@ const Overview = () => {
                   </p>
                 </div>
               )}
+            </div>
+            
+            {/* View All Notifications Button */}
+            <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+              <Link 
+                to="/notifications" 
+                className="w-full inline-flex items-center justify-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors duration-200"
+              >
+                <Icon icon="bell" className="mr-2" />
+                View All Notifications
+                <Icon icon="arrow-right" className="ml-2" />
+              </Link>
             </div>
           </div>
         </div>

@@ -38,7 +38,7 @@ from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 
 # Third-party imports
-from fastapi import FastAPI, HTTPException, Depends, Security, status, Request, File, Form, UploadFile
+from fastapi import FastAPI, HTTPException, Depends, Security, status, Request, File, Form, UploadFile, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -1399,21 +1399,32 @@ class WebInterfaceService:
                 # Also update legacy fields for compatibility
                 stats["total_items"] = db_stats.get("total_items", 0)
                 
-                # Get recent notifications
-                if self.db:
-                    recent = await self.db.get_recent_changes(limit=10)
-                else:
-                    recent = await self.webhook_service.db.get_recent_changes(limit=10)
-                stats["recent_notifications"] = [
-                    {
-                        "id": item.get("id"),
-                        "name": item.get("name", "Unknown"),
-                        "type": item.get("media_type"),
-                        "event": item.get("last_event"),
-                        "timestamp": item.get("last_updated")
-                    }
-                    for item in recent
-                ]
+                # Get recent notifications from notification history (last 4 hours, max 10 items)
+                try:
+                    if self.web_db:
+                        # Use the actual notification history with delivery status
+                        recent_notifications = await self.web_db.get_recent_notifications(limit=10, hours=4)
+                        stats["recent_notifications"] = recent_notifications
+                    else:
+                        # Fallback to old method if web_db not available
+                        if self.db:
+                            recent = await self.db.get_recent_changes(limit=10)
+                        else:
+                            recent = await self.webhook_service.db.get_recent_changes(limit=10)
+                        stats["recent_notifications"] = [
+                            {
+                                "id": item.get("id"),
+                                "name": item.get("name", "Unknown"),
+                                "type": item.get("media_type"),
+                                "event": item.get("last_event"),
+                                "status": "pending",  # Old method doesn't track status
+                                "timestamp": item.get("last_updated")
+                            }
+                            for item in recent
+                        ]
+                except Exception as e:
+                    self.logger.warning(f"Failed to get recent notifications: {e}")
+                    stats["recent_notifications"] = []
                 
                 # Discord webhook status
                 if hasattr(self.webhook_service, 'discord') and self.webhook_service.discord:
@@ -1739,6 +1750,23 @@ async def lifespan(app_instance: FastAPI):
         logger.warning(f"Could not check SSL settings: {str(e)}")
         logger.info("Web interface ready (SSL status unknown)")
     
+    # Start background task for cleaning up old notification history
+    cleanup_task = None
+    async def cleanup_old_notifications():
+        """Background task to clean up notification history older than 7 days"""
+        logger.info("Starting notification history cleanup task")
+        while True:
+            try:
+                await asyncio.sleep(86400)  # Run once per day (24 hours)
+                if web_service.web_db:
+                    await web_service.web_db.cleanup_old_notifications(days=7)
+                    logger.info("Cleaned up notification history older than 7 days")
+            except Exception as e:
+                logger.error(f"Failed to cleanup old notifications: {e}")
+                await asyncio.sleep(3600)  # On error, wait 1 hour before retry
+    
+    cleanup_task = asyncio.create_task(cleanup_old_notifications())
+    
     logger.info("Web interface startup complete")
     logger.debug(f"Total registered routes: {len(app_instance.routes)}")
     
@@ -1748,6 +1776,14 @@ async def lifespan(app_instance: FastAPI):
     logger.info("=" * 60)
     logger.info("Shutting down web interface...")
     logger.info("=" * 60)
+    
+    # Cancel background cleanup task
+    if cleanup_task:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
     
     try:
         # Cleanup tasks if needed
@@ -2279,6 +2315,48 @@ async def revoke_webhook_api_key(
     except Exception as e:
         logger.error(f"Failed to revoke webhook API key: {e}")
         raise HTTPException(status_code=500, detail="Failed to revoke API key")
+
+
+@app.get("/api/notifications")
+async def get_notifications(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    hours: int = Query(4, ge=1, le=24),
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Get paginated notification history"""
+    logger.debug(f"[API] Notifications requested - page: {page}, limit: {limit}, hours: {hours}")
+    
+    try:
+        if web_service.web_db:
+            # Calculate offset for pagination
+            offset = (page - 1) * limit
+            
+            # Get total count (for pagination info)
+            all_notifications = await web_service.web_db.get_recent_notifications(limit=1000, hours=hours)
+            total_count = len(all_notifications)
+            
+            # Get paginated subset
+            paginated_notifications = all_notifications[offset:offset + limit]
+            
+            return {
+                "notifications": paginated_notifications,
+                "page": page,
+                "limit": limit,
+                "total": total_count,
+                "total_pages": (total_count + limit - 1) // limit  # Ceiling division
+            }
+        else:
+            return {
+                "notifications": [],
+                "page": 1,
+                "limit": limit,
+                "total": 0,
+                "total_pages": 0
+            }
+    except Exception as e:
+        logger.error(f"[API] Error fetching notifications: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch notifications")
 
 
 @app.get("/api/overview", response_model=OverviewStats)

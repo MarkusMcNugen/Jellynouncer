@@ -135,6 +135,39 @@ class WebDatabaseManager:
                 ON notification_stats(day_bucket)
             """)
             
+            # Notification history table for tracking individual notifications
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS notification_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    item_id TEXT NOT NULL,
+                    item_name TEXT NOT NULL,
+                    item_type TEXT,
+                    event_type TEXT NOT NULL,  -- 'new', 'upgraded', 'deleted'
+                    status TEXT NOT NULL,       -- 'pending', 'sent', 'failed'
+                    discord_webhook TEXT,       -- Which webhook was used
+                    error_message TEXT,         -- If failed, why
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    processing_time_ms INTEGER,
+                    metadata TEXT              -- JSON for additional data
+                )
+            """)
+            
+            # Indexes for efficient queries
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notification_history_timestamp 
+                ON notification_history(timestamp DESC)
+            """)
+            
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notification_history_status 
+                ON notification_history(status)
+            """)
+            
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notification_history_item 
+                ON notification_history(item_id)
+            """)
+            
             # Add new columns to existing table if they don't exist (migration)
             cursor = conn.execute("PRAGMA table_info(notification_stats)")
             existing_columns = {row[1] for row in cursor.fetchall()}
@@ -664,3 +697,134 @@ class WebDatabaseManager:
     async def log_audit(self, user_id: int, action: str, description: str, metadata: Dict = None):
         """Log audit event (placeholder for future implementation)"""
         logger.info(f"Audit: User {user_id} performed {action}: {description}")
+    
+    # ==================== Notification History ====================
+    
+    async def add_notification_history(
+        self, 
+        item_id: str, 
+        item_name: str, 
+        item_type: str,
+        event_type: str,
+        status: str,
+        discord_webhook: str = None,
+        error_message: str = None,
+        processing_time_ms: int = None,
+        metadata: Dict = None
+    ):
+        """Add a notification to the history"""
+        import json
+        from datetime import datetime
+        
+        if not self.initialized:
+            await self.initialize()
+        
+        metadata_json = json.dumps(metadata) if metadata else None
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT INTO notification_history (
+                    item_id, item_name, item_type, event_type, status,
+                    discord_webhook, error_message, processing_time_ms, metadata
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                item_id, item_name, item_type, event_type, status,
+                discord_webhook, error_message, processing_time_ms, metadata_json
+            ))
+            conn.commit()
+    
+    async def update_notification_status(self, item_id: str, status: str, error_message: str = None):
+        """Update the status of the most recent notification for an item"""
+        if not self.initialized:
+            await self.initialize()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                UPDATE notification_history
+                SET status = ?, error_message = ?
+                WHERE item_id = ?
+                  AND id = (
+                      SELECT MAX(id) FROM notification_history WHERE item_id = ?
+                  )
+            """, (status, error_message, item_id, item_id))
+            conn.commit()
+    
+    async def get_recent_notifications(self, limit: int = 20, hours: int = 4) -> list:
+        """
+        Get recent notifications with their delivery status.
+        Default: last 4 hours, max 20 items.
+        """
+        import json
+        from datetime import datetime, timedelta
+        
+        if not self.initialized:
+            await self.initialize()
+        
+        # Calculate cutoff time (default 4 hours)
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            cursor = conn.execute("""
+                SELECT 
+                    item_id as id,
+                    item_name as name,
+                    item_type as type,
+                    event_type as event,
+                    status,
+                    discord_webhook,
+                    error_message,
+                    timestamp,
+                    processing_time_ms,
+                    metadata
+                FROM notification_history
+                WHERE timestamp >= ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (cutoff_time, limit))
+            
+            notifications = []
+            for row in cursor:
+                notification = {
+                    "id": row['id'],
+                    "name": row['name'],
+                    "type": row['type'],
+                    "event": row['event'],
+                    "status": row['status'],
+                    "discord_webhook": row['discord_webhook'],
+                    "error_message": row['error_message'],
+                    "timestamp": row['timestamp'],
+                    "processing_time_ms": row['processing_time_ms']
+                }
+                
+                # Parse metadata if present
+                if row['metadata']:
+                    try:
+                        notification['metadata'] = json.loads(row['metadata'])
+                    except:
+                        pass
+                
+                notifications.append(notification)
+        
+        return notifications
+    
+    async def cleanup_old_notifications(self, days: int = 7):
+        """Remove notification history older than specified days"""
+        from datetime import datetime, timedelta
+        
+        if not self.initialized:
+            await self.initialize()
+        
+        cutoff_time = datetime.now() - timedelta(days=days)
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                DELETE FROM notification_history
+                WHERE timestamp < ?
+            """, (cutoff_time,))
+            
+            conn.commit()
+            
+            if cursor.rowcount > 0:
+                logger.info(f"Cleaned up {cursor.rowcount} old notification records")

@@ -183,4 +183,7 @@ export const apiService = {
   
   // Health
   healthCheck: () => api.get('/api/health'),
+  
+  // Notifications
+  getNotifications: (params) => api.get('/api/notifications', { params }),
 }

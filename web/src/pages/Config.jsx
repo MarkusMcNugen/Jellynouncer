@@ -27,12 +27,10 @@ import AuthEnableModal from '../components/AuthEnableModal';
 import AuthSetup from '../components/AuthSetup';
 
 const Config = () => {
-  logger.info('[COMPONENT] Config: Starting component initialization');
+  logger.info('[Config] Component initialization started');
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
-  logger.debug('[COMPONENT] Config: State hooks initialized');
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [activeTab, setActiveTab] = useState('jellyfin');
@@ -42,6 +40,18 @@ const Config = () => {
   const [showWebhookToken, setShowWebhookToken] = useState(false);
   const [showAuthEnableModal, setShowAuthEnableModal] = useState(false);
   const [showAuthSetup, setShowAuthSetup] = useState(false);
+  
+  logger.debug('[Config] State hooks initialized', {
+    initialStates: {
+      loading: true,
+      saving: false,
+      activeTab: 'jellyfin',
+      showAdvancedWarning: false,
+      showWebhookToken: false,
+      showAuthEnableModal: false,
+      showAuthSetup: false
+    }
+  });
   
   const [config, setConfig] = useState({
     jellyfin: {
@@ -162,36 +172,81 @@ const Config = () => {
   ];
 
   useEffect(() => {
+    logger.debug('[Config] useEffect triggered - initial mount');
     void fetchConfig();
+    
+    return () => {
+      logger.debug('[Config] Component unmounting');
+    };
   }, []);
 
   const fetchConfig = async () => {
-    logger.debug('Config: Starting fetchConfig');
+    const fetchTimer = logger.startTimer('[Config] fetchConfig execution');
+    logger.debug('[Config] Starting config fetch');
+    
     try {
       setLoading(true);
-      logger.debug('Config: Fetching from /api/config');
+      logger.debug('[Config] Calling API: GET /api/config');
       const response = await apiService.getConfig();
-      logger.info('Config: Data received', {
-        hasData: !!response.data,
-        keys: response.data ? Object.keys(response.data) : []
+      
+      const configData = response.data || response;
+      logger.info('[Config] Configuration loaded', {
+        hasData: !!configData,
+        sections: configData ? Object.keys(configData) : [],
+        logLevel: configData?.server?.log_level,
+        authEnabled: configData?.web_interface?.auth_enabled,
+        sslEnabled: configData?.web_interface?.ssl_enabled,
+        runMode: configData?.server?.run_mode,
+        jellyfinConfigured: !!configData?.jellyfin?.server_url
       });
-      setConfig(response.data || response);
+      
+      setConfig(configData);
       setError(null);
-      logger.debug('Config: Successfully loaded configuration');
+      
+      logger.debug('[Config] Configuration details (sanitized)', {
+        jellyfin: {
+          hasUrl: !!configData?.jellyfin?.server_url,
+          hasApiKey: !!configData?.jellyfin?.api_key,  // Only log existence, not value
+          hasUserId: !!configData?.jellyfin?.user_id
+        },
+        discord: {
+          hasDefaultWebhook: !!configData?.discord?.webhooks?.default?.url,  // Only log existence
+          routingEnabled: configData?.discord?.routing?.enabled,
+          webhookCount: Object.keys(configData?.discord?.webhooks || {}).length
+        },
+        metadata: {
+          enabled: configData?.metadata_services?.enabled,
+          omdbConfigured: !!configData?.metadata_services?.omdb?.api_key,  // Only log existence
+          tmdbConfigured: !!configData?.metadata_services?.tmdb?.api_key,  // Only log existence
+          tvdbConfigured: !!configData?.metadata_services?.tvdb?.api_key   // Only log existence
+        },
+        security: {
+          authEnabled: configData?.web_interface?.auth_enabled,
+          sslEnabled: configData?.web_interface?.ssl_enabled,
+          hasJwtSecret: !!configData?.web_interface?.jwt_secret  // Only log existence
+        }
+      });
     } catch (err) {
-      logger.error('Config: Failed to load', {
+      logger.error('[Config] Failed to load configuration', {
         message: err.message,
         response: err.response?.data,
-        status: err.response?.status
+        status: err.response?.status,
+        stack: err.stack
       });
       setError('Failed to load configuration');
     } finally {
       setLoading(false);
-      logger.debug('Config: Fetch complete');
+      fetchTimer.end();
     }
   };
 
   const handleSave = async () => {
+    const saveTimer = logger.startTimer('[Config] Save operation');
+    logger.debug('[Config] Starting save operation', {
+      activeTab,
+      sectionsModified: Object.keys(config)
+    });
+    
     try {
       setSaving(true);
       setError(null);
@@ -202,7 +257,11 @@ const Config = () => {
         const authEnabled = config.web_interface.auth_enabled || false;
         const requireWebhookAuth = config.web_interface.require_webhook_auth || false;
         
-        logger.debug('Config: Updating auth settings', { authEnabled, requireWebhookAuth });
+        logger.debug('[Config] Updating auth settings', { 
+          authEnabled, 
+          requireWebhookAuth,
+          // Never log passwords or secrets
+        });
         
         // Update auth settings through the proper endpoint
         await apiClient.put('/api/auth/settings', null, {
@@ -213,21 +272,65 @@ const Config = () => {
         });
       }
       
-      // Save the rest of the config
-      await apiClient.put('/api/config', config);
+      // Save the full config using the new endpoint
+      logger.debug('[Config] Saving full configuration');
+      await apiClient.put('/api/config/full', config);
+      
       setSuccess('Configuration saved successfully');
+      logger.info('[Config] Configuration saved successfully');
       
       // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => {
+        setSuccess(null);
+        logger.debug('[Config] Success message cleared');
+      }, 3000);
     } catch (err) {
-      setError('Failed to save configuration');
-      console.error('Save error:', err);
+      logger.error('[Config] Failed to save configuration', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        validationErrors: err.response?.data?.detail
+        // Never log the actual config data that failed to save
+      });
+      
+      // Extract detailed error message from server response
+      let errorMessage = 'Failed to save configuration';
+      if (err.response?.status === 422) {
+        // Validation error - show details
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string') {
+          errorMessage = `Configuration validation failed: ${detail}`;
+        } else if (Array.isArray(detail)) {
+          // Pydantic validation errors come as array
+          const errors = detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join(', ');
+          errorMessage = `Configuration validation failed: ${errors}`;
+        } else if (detail && typeof detail === 'object') {
+          errorMessage = `Configuration validation failed: ${JSON.stringify(detail)}`;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setSaving(false);
+      saveTimer.end();
     }
   };
 
   const handleInputChange = (section, key, value, subkey = null) => {
+    // List of sensitive fields that should never be logged
+    const sensitiveFields = ['api_key', 'password', 'jwt_secret', 'url', 'webhook', 'pin', 'subscriber_pin'];
+    const isSensitive = sensitiveFields.some(field => key.toLowerCase().includes(field));
+    
+    logger.debug('[Config] Field changed', {
+      section,
+      key,
+      subkey,
+      hasValue: !!value,
+      valueLength: typeof value === 'string' ? value.length : undefined,
+      // Only log value if it's not sensitive
+      value: !isSensitive ? value : '[REDACTED]'
+    });
+    
     setConfig(prev => {
       const newConfig = { ...prev };
       if (subkey) {

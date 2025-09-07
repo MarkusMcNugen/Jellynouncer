@@ -45,7 +45,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import uvicorn
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ValidationError
 import aiosqlite
 import jwt
 from passlib.context import CryptContext
@@ -2077,6 +2077,52 @@ async def update_config(
         
     except Exception as e:
         logger.error(f"Error updating config {config_update.section}.{config_update.key}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@app.put("/api/config/full")
+async def update_full_config(
+    config_data: Dict[str, Any],
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Update entire configuration at once"""
+    logger.debug(f"Full config update request by user {current_user.get('username') if current_user else 'anonymous'}")
+    
+    try:
+        # Load current config
+        config_path = Path("config/config.json")
+        
+        # Validate the new configuration using Pydantic model
+        from jellynouncer.config_models import AppConfig
+        validated_config = AppConfig(**config_data)
+        
+        # Save the updated config
+        with open(config_path, 'w') as f:
+            json.dump(config_data, f, indent=2)
+        
+        # Update in-memory config
+        web_service.config = validated_config
+        
+        logger.info("Full configuration updated successfully")
+        
+        if current_user:
+            await web_service.web_db.log_audit(
+                current_user.get("user_id"),
+                "config_updated",
+                "Updated full configuration",
+                None
+            )
+        
+        return {"success": True, "message": "Configuration saved successfully"}
+        
+    except ValidationError as e:
+        logger.error(f"Configuration validation failed: {e.errors()}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors()
+        )
+    except Exception as e:
+        logger.error(f"Error updating full config: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

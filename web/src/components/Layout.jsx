@@ -9,12 +9,25 @@ import { Icon, IconDuotone, IconLight } from './FontAwesomeIcon';
 import logger from '../services/logger';
 
 const Layout = () => {
+  logger.info('[Layout] Component initialization started');
+  
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, logout, user, authRequired } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAuthSetup, setShowAuthSetup] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
+  
+  logger.debug('[Layout] State hooks initialized', {
+    initialStates: {
+      sidebarOpen: false,
+      showAuthSetup: false,
+      showPasswordReset: false,
+      isAuthenticated,
+      authRequired,
+      currentPath: location.pathname
+    }
+  });
 
   const navigation = [
     { name: 'Overview', href: '/', icon: 'house', style: 'duotone' },
@@ -25,21 +38,53 @@ const Layout = () => {
 
   // Log navigation changes
   useEffect(() => {
-    logger.debug('Layout: Navigation changed', {
+    logger.debug('[Layout] Navigation changed', {
       path: location.pathname,
       isAuthenticated,
-      user: user?.username
+      authRequired,
+      username: user?.username || 'none'
     });
-  }, [location, isAuthenticated, user]);
+  }, [location, isAuthenticated, user, authRequired]);
+  
+  // Log component lifecycle
+  useEffect(() => {
+    logger.debug('[Layout] Component mounted');
+    return () => {
+      logger.debug('[Layout] Component unmounting');
+    };
+  }, []);
 
   const handleLogout = () => {
-    logger.info('Layout: User logging out');
+    logger.info('[Layout] User logout initiated', {
+      username: user?.username
+    });
     logout();
     navigate('/login');
+    logger.debug('[Layout] Redirected to login page');
   };
 
   const isActive = (path) => {
-    return location.pathname === path;
+    const active = location.pathname === path;
+    return active;
+  };
+  
+  const handleNavClick = (item) => {
+    logger.debug('[Layout] Navigation item clicked', {
+      name: item.name,
+      href: item.href,
+      fromPath: location.pathname
+    });
+    setSidebarOpen(false);
+  };
+  
+  const handleAuthSetupToggle = (show) => {
+    logger.debug('[Layout] Auth setup modal toggled', { show });
+    setShowAuthSetup(show);
+  };
+  
+  const handlePasswordResetToggle = (show) => {
+    logger.debug('[Layout] Password reset modal toggled', { show });
+    setShowPasswordReset(show);
   };
 
   return (

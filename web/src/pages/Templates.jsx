@@ -1,18 +1,18 @@
-import { useState, useRef, useEffect } from 'react'
+/* eslint-disable no-unused-vars */
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { apiService } from '../services/api'
-import Jinja2Editor from '../components/Jinja2Editor'
-import { Icon, IconDuotone, IconLight } from '../components/FontAwesomeIcon'
+import Jinja2Editor from '../components/Jinja2Editor' // Used in JSX
+import { IconDuotone, IconLight } from '../components/FontAwesomeIcon' // Used in JSX
 import toast from 'react-hot-toast'
 import logger from '../services/logger'
+/* eslint-enable no-unused-vars */
 
-const Templates = () => {
-  logger.info('[COMPONENT] Templates: Starting component initialization');
+export default function Templates() {
+  logger.info('[Templates] Component initialization started');
   
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [editorContent, setEditorContent] = useState('')
-  
-  logger.debug('[COMPONENT] Templates: State hooks initialized');
   const [showCheatsheet, setShowCheatsheet] = useState(false)
   const [isModified, setIsModified] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -24,20 +24,44 @@ const Templates = () => {
     return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   })
   
+  logger.debug('[Templates] State hooks initialized', {
+    initialStates: {
+      selectedTemplate: null,
+      showCheatsheet: false,
+      isModified: false,
+      showCreateModal: false,
+      activeTab: 'basic',
+      lineWrapping: false,
+      theme
+    }
+  })
+  
   const { data: templates, refetch } = useQuery({
     queryKey: ['templates'],
     queryFn: async () => {
-      logger.debug('Templates: Fetching template list');
+      const fetchTimer = logger.startTimer('[Templates] Fetch template list');
+      logger.debug('[Templates] Fetching template list from API');
+      
       try {
         const response = await apiService.getTemplates();
         const templates = response?.data || [];
-        logger.info('Templates: List received', {
+        
+        logger.info('[Templates] Template list loaded', {
           count: templates.length,
-          templates: templates.map(t => t.name)
+          templates: templates.map(t => ({
+            name: t.name,
+            isDefault: t.is_default,
+            hasContent: !!t.content
+          }))
         });
+        
+        fetchTimer.end();
         return templates;
       } catch (err) {
-        logger.error('Templates: Failed to fetch list', err);
+        logger.error('[Templates] Failed to fetch template list', {
+          message: err.message,
+          response: err.response?.data
+        });
         throw err;
       }
     }
@@ -45,77 +69,126 @@ const Templates = () => {
 
   const saveMutation = useMutation({
     mutationFn: ({ name, content }) => {
-      logger.debug('Templates: Saving template', { name, contentLength: content.length });
+      logger.debug('[Templates] Saving template', { 
+        name, 
+        contentLength: content.length,
+        hasContent: !!content
+      });
       return apiService.updateTemplate(name, content);
     },
-    onSuccess: () => {
-      logger.info('Templates: Save successful');
+    onSuccess: (_, variables) => {
+      logger.info('[Templates] Template saved successfully', {
+        name: variables.name,
+        contentLength: variables.content.length
+      });
       toast.success('Template saved successfully')
       setIsModified(false)
       void refetch()
     },
-    onError: (err) => {
-      logger.error('Templates: Save failed', err);
+    onError: (err, variables) => {
+      logger.error('[Templates] Failed to save template', {
+        name: variables.name,
+        message: err.message,
+        response: err.response?.data
+      });
+      toast.error('Failed to save template')
     }
   })
 
   const restoreMutation = useMutation({
     mutationFn: (name) => {
-      logger.debug('Templates: Restoring template to default', { name });
+      logger.debug('[Templates] Restoring template to default', { name });
       return apiService.restoreTemplate(name);
     },
-    onSuccess: () => {
-      logger.info('Templates: Restore successful');
+    onSuccess: (_, name) => {
+      logger.info('[Templates] Template restored to default', { name });
       toast.success('Template restored to default')
       void loadTemplate(selectedTemplate)
       void refetch()
     },
-    onError: (err) => {
-      logger.error('Templates: Restore failed', err);
+    onError: (err, name) => {
+      logger.error('[Templates] Failed to restore template', {
+        name,
+        message: err.message,
+        response: err.response?.data
+      });
+      toast.error('Failed to restore template')
     }
   })
 
   const createMutation = useMutation({
     mutationFn: ({ name, content }) => {
-      logger.debug('Templates: Creating new template', { name });
+      logger.debug('[Templates] Creating new template', { 
+        name,
+        contentLength: content?.length || 0
+      });
       return apiService.updateTemplate(name, content);
     },
     onSuccess: (_, { name }) => {
-      logger.info('Templates: Create successful');
+      logger.info('[Templates] Template created successfully', { name });
       toast.success('Template created successfully')
       setShowCreateModal(false)
       setNewTemplateName('')
       void refetch()
       void loadTemplate(name)
     },
-    onError: (err) => {
-      logger.error('Templates: Create failed', err);
+    onError: (err, variables) => {
+      logger.error('[Templates] Failed to create template', {
+        name: variables.name,
+        message: err.message,
+        response: err.response?.data
+      });
       toast.error('Failed to create template')
     }
   })
 
   const loadTemplate = async (name) => {
-    logger.debug('Templates: Loading template', { name });
+    const loadTimer = logger.startTimer(`[Templates] Load template: ${name}`);
+    logger.debug('[Templates] Loading template content', { name });
+    
     try {
       const response = await apiService.getTemplate(name)
-      logger.info('Templates: Template loaded', { 
+      const content = response.data?.content || ''
+      
+      logger.info('[Templates] Template loaded', { 
         name, 
-        contentLength: response.data?.content?.length || 0 
+        contentLength: content.length,
+        hasVariables: content.includes('{{')
       });
+      
       setSelectedTemplate(name)
-      setEditorContent(response.data.content)
+      setEditorContent(content)
       setIsModified(false)
+      loadTimer.end();
     } catch (err) {
-      logger.error('Templates: Failed to load template', { name, error: err });
+      logger.error('[Templates] Failed to load template', { 
+        name, 
+        message: err.message,
+        response: err.response?.data
+      });
+      toast.error(`Failed to load template: ${name}`)
     }
   }
 
   const handleEditorChange = (value) => {
-    setEditorContent(value || '')
+    const newContent = value || ''
+    logger.debug('[Templates] Editor content changed', {
+      template: selectedTemplate,
+      oldLength: editorContent.length,
+      newLength: newContent.length,
+      modified: true
+    });
+    setEditorContent(newContent)
     setIsModified(true)
   }
 
   const handleSave = () => {
+    logger.debug('[Templates] Save button clicked', {
+      template: selectedTemplate,
+      isModified,
+      contentLength: editorContent.length
+    });
+    
     if (isModified && selectedTemplate) {
       saveMutation.mutate({ name: selectedTemplate, content: editorContent })
     }
@@ -125,10 +198,24 @@ const Templates = () => {
   useEffect(() => {
     if (templates && templates.length > 0 && !selectedTemplate) {
       const firstTemplate = templates[0].name;
-      logger.debug('Templates: Auto-selecting first template', { name: firstTemplate });
+      logger.debug('[Templates] Auto-selecting first template', { 
+        name: firstTemplate,
+        totalTemplates: templates.length
+      });
       loadTemplate(firstTemplate);
     }
-  }, [templates]); // Only depend on templates to avoid re-running
+  }, [templates, selectedTemplate]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Log component mount/unmount
+  useEffect(() => {
+    logger.debug('[Templates] Component mounted');
+    return () => {
+      logger.debug('[Templates] Component unmounting', {
+        hadUnsavedChanges: isModified,
+        lastSelectedTemplate: selectedTemplate
+      });
+    };
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="h-full flex flex-col -mx-4 sm:-mx-6 lg:-mx-8">
@@ -180,7 +267,7 @@ const Templates = () => {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{template.name}</p>
                       <p className="text-xs text-dark-text-muted">
-                        {template['is_default'] ? 'Default' : 'Custom'}
+                        {template.is_default ? 'Default' : 'Custom'}
                       </p>
                     </div>
                   </div>
@@ -364,7 +451,7 @@ const Templates = () => {
                               <div><span className="text-blue-400">item.genres</span> - List of genres</div>
                               <div><span className="text-blue-400">item.studios</span> - Production studios</div>
                               <div><span className="text-blue-400">item.tags</span> - User tags</div>
-                              <div><span className="text-blue-400">item.runtime_formatted</span> - Duration (e.g., "2h 15m")</div>
+                              <div><span className="text-blue-400">item.runtime_formatted</span> - Duration (e.g., &quot;2h 15m&quot;)</div>
                               <div><span className="text-blue-400">item.premiere_date</span> - Original release date</div>
                             </>
                           )}
@@ -538,5 +625,3 @@ const CodeExample = ({ code, description }) => (
     <p className="text-xs text-dark-text-muted">{description}</p>
   </div>
 )
-
-export default Templates

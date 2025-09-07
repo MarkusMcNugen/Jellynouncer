@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon, IconDuotone, IconLight } from '../components/FontAwesomeIcon';
 import { useAuthStore } from '../stores/authStore';
+import logger from '../services/logger';
 
 const Login = () => {
+  logger.info('[Login] Component initialization started');
+  
   const navigate = useNavigate();
   const { login } = useAuthStore();
   const [loading, setLoading] = useState(false);
@@ -12,19 +15,54 @@ const Login = () => {
     username: '',
     password: '',
   });
+  
+  logger.debug('[Login] State hooks initialized', {
+    initialStates: {
+      loading: false,
+      error: null,
+      hasUsername: false,
+      hasPassword: false
+    }
+  });
+  
+  useEffect(() => {
+    logger.debug('[Login] Component mounted');
+    return () => {
+      logger.debug('[Login] Component unmounting');
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    logger.debug('[Login] Form submitted', {
+      hasUsername: !!formData.username,
+      usernameLength: formData.username.length
+      // Never log the actual password
+    });
+    
     setLoading(true);
     setError(null);
 
     try {
+      logger.debug('[Login] Attempting authentication');
       const success = await login(formData.username, formData.password);
       
       if (success) {
+        logger.info('[Login] Authentication successful', {
+          username: formData.username
+        });
         navigate('/');
+      } else {
+        logger.warn('[Login] Authentication failed - invalid response');
       }
     } catch (err) {
+      logger.error('[Login] Authentication error', {
+        message: err.message,
+        status: err.response?.status,
+        detail: err.response?.data?.detail
+        // Never log the password that was attempted
+      });
       setError(err.response?.data?.detail || 'Invalid username or password');
     } finally {
       setLoading(false);
@@ -33,6 +71,15 @@ const Login = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Only log field changes without sensitive values
+    logger.debug('[Login] Form field changed', {
+      field: name,
+      hasValue: !!value,
+      length: value.length
+      // Never log the actual password value
+    });
+    
     setFormData(prev => ({
       ...prev,
       [name]: value,

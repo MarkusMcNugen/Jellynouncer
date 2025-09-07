@@ -33,7 +33,7 @@ ChartJS.register(
 );
 
 const Overview = () => {
-  logger.info('[COMPONENT] Overview: Starting component initialization');
+  logger.info('[Overview] Component initialization started');
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -42,76 +42,152 @@ const Overview = () => {
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   
-  logger.debug('[COMPONENT] Overview: State hooks initialized');
+  logger.debug('[Overview] State hooks initialized', {
+    initialStates: {
+      loading: true,
+      error: null,
+      stats: null,
+      health: null,
+      recentNotifications: [],
+      refreshing: false
+    }
+  });
 
   const fetchData = async () => {
-    logger.debug('Overview: Starting fetchData', { 
-      currentState: { loading, hasStats: !!stats, hasHealth: !!health, hasError: !!error }
+    const fetchTimer = logger.startTimer('[Overview] fetchData execution');
+    
+    logger.debug('[Overview] fetchData called', { 
+      currentState: { 
+        loading, 
+        hasStats: !!stats, 
+        hasHealth: !!health, 
+        hasError: !!error,
+        statsKeys: stats ? Object.keys(stats) : null
+      }
     });
     
     try {
       setRefreshing(true);
-      logger.debug('Overview: Making API calls to /api/overview and /api/health');
+      logger.debug('[Overview] Starting parallel API calls');
       
+      const apiTimer = logger.startTimer('[Overview] API calls');
       const [overviewData, healthData] = await Promise.all([
         apiService.getOverview(),
         apiService.healthCheck(),
       ]);
+      apiTimer.end();
 
-      logger.info('Overview: API responses received', {
-        overviewStatus: overviewData.status,
-        healthStatus: healthData.status,
-        hasOverviewData: !!overviewData.data,
-        hasHealthData: !!healthData.data,
-        overviewKeys: overviewData.data ? Object.keys(overviewData.data) : [],
-        healthKeys: healthData.data ? Object.keys(healthData.data) : []
+      logger.info('[Overview] API responses received', {
+        overviewStatus: overviewData?.status,
+        healthStatus: healthData?.status,
+        hasOverviewData: !!overviewData?.data,
+        hasHealthData: !!healthData?.data,
+        overviewKeys: overviewData?.data ? Object.keys(overviewData.data) : [],
+        healthKeys: healthData?.data ? Object.keys(healthData.data) : []
       });
 
       // Extract data from axios response
-      const overview = overviewData.data;
-      logger.debug('Overview: Processing overview data', {
+      const overview = overviewData?.data;
+      
+      // Deep inspection of overview data
+      logger.debug('[Overview] Processing overview data - detailed inspection', {
         hasData: !!overview,
+        dataType: typeof overview,
         keys: overview ? Object.keys(overview) : [],
-        totalItems: overview?.total_items,
-        itemsToday: overview?.items_today
+        jellyfin_stats: {
+          exists: !!overview?.jellyfin_stats,
+          keys: overview?.jellyfin_stats ? Object.keys(overview.jellyfin_stats) : [],
+          total_items: overview?.jellyfin_stats?.total_items,
+          server_status: overview?.jellyfin_stats?.server_status
+        },
+        webhook_stats: {
+          exists: !!overview?.webhook_stats,
+          received: overview?.webhook_stats?.received,
+          failed: overview?.webhook_stats?.failed
+        },
+        notification_stats: {
+          exists: !!overview?.notification_stats,
+          sent: overview?.notification_stats?.sent,
+          failed: overview?.notification_stats?.failed
+        },
+        synced_items: {
+          exists: !!overview?.synced_items,
+          total: overview?.synced_items?.total,
+          database_size_mb: overview?.synced_items?.database_size_mb
+        },
+        historical_stats: {
+          exists: !!overview?.historical_stats,
+          hasHourly: !!overview?.historical_stats?.hourly,
+          hourlyCount: overview?.historical_stats?.hourly?.length,
+          hasTotals: !!overview?.historical_stats?.totals
+        }
       });
+      
       setStats(overview);
       
-      logger.debug('Overview: Processing health data', {
-        status: healthData.data?.status,
-        components: healthData.data?.components ? Object.keys(healthData.data.components) : []
+      logger.debug('[Overview] Processing health data', {
+        status: healthData?.data?.status,
+        components: healthData?.data?.components ? Object.keys(healthData.data.components) : [],
+        componentValues: healthData?.data?.components
       });
-      setHealth(healthData.data);
+      setHealth(healthData?.data);
       
-      const notifications = overview && overview['recent_notifications'] ? overview['recent_notifications'] : [];
-      logger.debug('Overview: Processing notifications', {
+      const notifications = overview?.recent_notifications || [];
+      logger.debug('[Overview] Processing notifications', {
         count: notifications.length,
-        hasNotifications: notifications.length > 0
+        hasNotifications: notifications.length > 0,
+        firstNotification: notifications[0] ? {
+          title: notifications[0].title,
+          event: notifications[0].event,
+          status: notifications[0].status,
+          timestamp: notifications[0].timestamp
+        } : null
       });
       setRecentNotifications(notifications);
       
       setError(null);
-      logger.info('Overview: Data fetch successful');
+      logger.info('[Overview] Data fetch completed successfully', {
+        statsSet: !!overview,
+        healthSet: !!healthData?.data,
+        notificationsCount: notifications.length
+      });
+      
+      fetchTimer.end();
     } catch (err) {
-      logger.error('Overview: API Error', {
+      logger.error('[Overview] API Error occurred', {
         message: err.message,
         response: err.response?.data,
         status: err.response?.status,
         statusText: err.response?.statusText,
-        url: err.config?.url
+        url: err.config?.url,
+        stack: err.stack
       });
       setError('Failed to fetch dashboard data');
     } finally {
       setLoading(false);
       setRefreshing(false);
-      logger.debug('Overview: Fetch complete, loading set to false');
+      logger.debug('[Overview] Fetch complete', {
+        loading: false,
+        refreshing: false,
+        hasError: !!error,
+        hasStats: !!stats
+      });
     }
   };
 
   useEffect(() => {
+    logger.debug('[Overview] useEffect triggered - initial mount');
     void fetchData();
-    const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+    
+    const interval = setInterval(() => {
+      logger.debug('[Overview] Auto-refresh triggered (30s interval)');
+      fetchData();
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => {
+      logger.debug('[Overview] Component unmounting - clearing interval');
+      clearInterval(interval);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getHealthColor = (status) => {
@@ -333,18 +409,21 @@ const Overview = () => {
   };
 
   // Log render conditions
-  logger.debug('Overview: Render check', {
+  logger.debug('[Overview] Render decision point', {
     loading,
     hasStats: !!stats,
     hasHealth: !!health,
     hasError: !!error,
     statsKeys: stats ? Object.keys(stats) : null,
+    jellyfin_stats: stats?.jellyfin_stats ? Object.keys(stats.jellyfin_stats) : null,
     willShowLoading: loading && !stats,
-    willShowContent: !loading || stats
+    willShowContent: !loading || !!stats,
+    totalLibraryItems: stats?.jellyfin_stats?.total_items,
+    syncedItems: stats?.synced_items?.total
   });
 
   if (loading && !stats) {
-    logger.debug('Overview: Showing loading spinner');
+    logger.debug('[Overview] Rendering loading state');
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
@@ -352,10 +431,24 @@ const Overview = () => {
     );
   }
 
-  logger.info('Overview: Rendering main content', {
+  logger.info('[Overview] Rendering main content', {
     statsAvailable: !!stats,
     healthAvailable: !!health,
-    notificationsCount: recentNotifications.length
+    notificationsCount: recentNotifications.length,
+    jellyfinStats: {
+      total_items: stats?.jellyfin_stats?.total_items,
+      server_name: stats?.jellyfin_stats?.server_name,
+      server_status: stats?.jellyfin_stats?.server_status
+    },
+    webhookStats: {
+      received: stats?.webhook_stats?.received,
+      failed: stats?.webhook_stats?.failed
+    },
+    notificationStats: {
+      sent: stats?.notification_stats?.sent,
+      failed: stats?.notification_stats?.failed,
+      success_rate: stats?.notification_stats?.success_rate
+    }
   });
 
   // Helper function to format numbers

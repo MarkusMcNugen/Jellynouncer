@@ -762,11 +762,8 @@ def setup_web_logging(log_level: str = "INFO", log_dir: str = "/app/logs") -> lo
         client_logger.info("Client log received")
         ```
     """
-    # Check if main logging is already set up
-    main_logger = logging.getLogger("jellynouncer")
-    if not main_logger.handlers:
-        # First call main setup_logging to set up colored console output
-        setup_logging(log_level, log_dir)
+    # Don't call setup_logging here as it will cause web logs to inherit main handlers
+    # We'll set up our own console handler for web logs
     
     # Now set up a separate file handler for web logs
     valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
@@ -785,6 +782,10 @@ def setup_web_logging(log_level: str = "INFO", log_dir: str = "/app/logs") -> lo
     
     # Get the web logger
     web_logger = logging.getLogger("jellynouncer.web")
+    web_logger.setLevel(numeric_level)
+    
+    # IMPORTANT: Prevent propagation to parent logger to avoid logs appearing in main log file
+    web_logger.propagate = False
     
     # Add a separate file handler specifically for jellynouncer-web.log
     web_log_file = log_path / "jellynouncer-web.log"
@@ -835,6 +836,109 @@ def setup_web_logging(log_level: str = "INFO", log_dir: str = "/app/logs") -> lo
     except (OSError, IOError) as e:
         web_logger.error(f"Failed to create web log file handler: {e}")
     
+    # Add console handler for web logs with the same colored output as main logger
+    console_handler_exists = any(isinstance(h, logging.StreamHandler) and 
+                                 not isinstance(h, logging.FileHandler)
+                                 for h in web_logger.handlers)
+    
+    if not console_handler_exists:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(numeric_level)
+        
+        # Determine if colors should be used (same logic as main logger)
+        use_colors = False
+        if COLORAMA_AVAILABLE:
+            # Check various conditions for color support
+            env_no_color = os.environ.get('NO_COLOR', '').lower() in ('1', 'true', 'yes')
+            env_force_color = os.environ.get('FORCE_COLOR', '').lower() in ('1', 'true', 'yes')
+            in_docker = os.path.exists('/.dockerenv')
+            has_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
+            
+            # Try to get config settings
+            config_force_color = False
+            config_disable_color = False
+            try:
+                from jellynouncer.config_models import ConfigurationValidator
+                validator = ConfigurationValidator()
+                config = validator.load_and_validate_config()
+                config_force_color = config.server.force_color_output
+                config_disable_color = config.server.disable_color_output
+            except:
+                pass
+            
+            # Determine if we should use colors
+            if config_disable_color or env_no_color:
+                use_colors = False
+            elif in_docker or config_force_color or env_force_color:
+                use_colors = True
+                if COLORAMA_AVAILABLE and colorama:
+                    colorama.init(strip=False, convert=False)
+            elif has_tty:
+                use_colors = True
+                if COLORAMA_AVAILABLE and colorama:
+                    colorama.init()
+        
+        # Create BracketFormatter for console (same as main logger)
+        class WebBracketFormatter(logging.Formatter):
+            """Colored formatter for web console output."""
+            # Color definitions using ANSI codes or colorama
+            if use_colors:
+                TIMESTAMP_COLOR = Fore.CYAN if COLORAMA_AVAILABLE else '\033[36m'
+                COMPONENT_COLOR = Fore.MAGENTA if COLORAMA_AVAILABLE else '\033[35m'
+                RESET = Style.RESET_ALL if COLORAMA_AVAILABLE else '\033[0m'
+                
+                # Level colors
+                LEVEL_COLORS = {
+                    'DEBUG': Fore.BLUE if COLORAMA_AVAILABLE else '\033[34m',
+                    'INFO': Fore.GREEN if COLORAMA_AVAILABLE else '\033[32m',
+                    'WARNING': Fore.YELLOW if COLORAMA_AVAILABLE else '\033[33m',
+                    'ERROR': Fore.RED if COLORAMA_AVAILABLE else '\033[31m',
+                    'CRITICAL': f"{Fore.RED}{Style.BRIGHT}" if COLORAMA_AVAILABLE else '\033[91m'
+                }
+            else:
+                # No colors
+                TIMESTAMP_COLOR = ''
+                COMPONENT_COLOR = ''
+                RESET = ''
+                LEVEL_COLORS = {}
+            
+            def format(self, record):
+                # Get timestamp
+                tz_env = os.environ.get('TZ')
+                if tz_env:
+                    timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
+                    try:
+                        import time
+                        tz_name = time.tzname[time.daylight]
+                        timestamp = f"{timestamp} {tz_name}"
+                    except:
+                        pass
+                else:
+                    timestamp = datetime.fromtimestamp(
+                        record.created,
+                        tz=timezone.utc
+                    ).strftime('%Y-%m-%d %H:%M:%S UTC')
+                
+                message_text = record.getMessage()
+                
+                # Format with colors if enabled
+                if use_colors:
+                    level_color = self.LEVEL_COLORS.get(record.levelname, '')
+                    formatted = (
+                        f"{self.TIMESTAMP_COLOR}[{timestamp}]{self.RESET}"
+                        f"{level_color}[{record.levelname}]{self.RESET}"
+                        f"{self.COMPONENT_COLOR}[{record.name}]{self.RESET} "
+                        f"{level_color}{message_text}{self.RESET}"
+                    )
+                else:
+                    formatted = f"[{timestamp}][{record.levelname}][{record.name}] {message_text}"
+                
+                return formatted
+        
+        formatter = WebBracketFormatter()
+        console_handler.setFormatter(formatter)
+        web_logger.addHandler(console_handler)
+    
     return web_logger
 
 
@@ -880,6 +984,8 @@ def get_web_logger(name: str = "jellynouncer.web") -> logging.Logger:
         parent_logger = logging.getLogger("jellynouncer.web")
         if parent_logger.handlers and not logger.handlers:
             logger.parent = parent_logger
+            # Also prevent propagation for child loggers to avoid duplicate logs
+            logger.propagate = False
     
     return logger
 

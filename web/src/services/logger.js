@@ -29,11 +29,24 @@ class ClientLogger {
     this.isOnline = navigator.onLine;
     this.batchTimer = null;
     this.isSending = false;
+    this.configLogLevel = null;
     
     // Configure loglevel based on environment
-    // Set to debug for now to troubleshoot issues
+    // Default to 'info', will be updated from backend config
     const isDev = import.meta.env.DEV;
-    log.setLevel('debug'); // Always debug for troubleshooting
+    const urlParams = new URLSearchParams(window.location.search);
+    const debugParam = urlParams.get('debug');
+    
+    // Check for debug mode from various sources
+    if (debugParam === 'true' || localStorage.getItem('debug_mode') === 'true') {
+      log.setLevel('debug');
+      console.log('[Logger] Debug mode enabled via URL parameter or localStorage');
+    } else {
+      log.setLevel('info'); // Default to info, will update from config
+    }
+    
+    // Fetch actual log level from backend configuration
+    this.fetchLogLevel()
     
     // Store original methods
     this.originalMethods = {
@@ -67,6 +80,43 @@ class ClientLogger {
         pixelRatio: window.devicePixelRatio
       }
     });
+  }
+  
+  async fetchLogLevel() {
+    try {
+      // Try to get log level from backend config
+      const response = await fetch('/api/config');
+      if (response.ok) {
+        const config = await response.json();
+        const backendLogLevel = config?.server?.log_level?.toLowerCase();
+        
+        if (backendLogLevel && this.configLogLevel !== backendLogLevel) {
+          this.configLogLevel = backendLogLevel;
+          
+          // Map backend log levels to loglevel library levels
+          const levelMap = {
+            'debug': 'debug',
+            'info': 'info',
+            'warning': 'warn',
+            'warn': 'warn',
+            'error': 'error'
+          };
+          
+          const mappedLevel = levelMap[backendLogLevel] || 'info';
+          
+          // Only update if not in debug mode from URL/localStorage
+          const urlParams = new URLSearchParams(window.location.search);
+          const debugParam = urlParams.get('debug');
+          if (debugParam !== 'true' && localStorage.getItem('debug_mode') !== 'true') {
+            log.setLevel(mappedLevel);
+            this.originalMethods.info(`[Logger] Log level updated from backend config: ${mappedLevel}`);
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail, use default log level
+      this.originalMethods.debug('[Logger] Could not fetch backend log level:', error);
+    }
   }
   
   getOrCreateSessionId() {
@@ -379,6 +429,75 @@ class ClientLogger {
 // Create singleton instance
 const logger = new ClientLogger();
 
+/**
+ * @typedef {Object} Logger
+ * @property {function(...any): void} debug - Log debug messages
+ * @property {function(...any): void} info - Log info messages
+ * @property {function(...any): void} warn - Log warning messages
+ * @property {function(...any): void} error - Log error messages
+ * @property {function(string): Object} startTimer - Start a performance timer
+ * @property {function(string): void} setLevel - Set the log level
+ * @property {function(): string} getLevel - Get current log level
+ * @property {function(string, Object=): void} logComponentMount - Log component mount
+ * @property {function(string): void} logComponentUnmount - Log component unmount
+ * @property {function(string, Error, Object=): void} logComponentError - Log component error
+ * @property {function(string, string, any=): void} logApiCall - Log API call
+ * @property {function(string, string, number, number): void} logApiResponse - Log API response
+ * @property {function(string, Object=): void} logUserAction - Log user action
+ * @property {function(): void} destroy - Clean up logger
+ */
+
+/** @type {Logger} */
+// @ts-ignore
+const typedLogger = logger;
+
+// Expose debug control functions for browser console
+if (typeof window !== 'undefined') {
+  window.logger = logger;
+  
+  // Global function to enable/disable debug mode
+  window.setDebugMode = (enabled) => {
+    if (enabled) {
+      localStorage.setItem('debug_mode', 'true');
+      log.setLevel('debug');
+      logger.info('[Logger] Debug mode enabled via console');
+    } else {
+      localStorage.removeItem('debug_mode');
+      // Restore to config level or info
+      log.setLevel(logger.configLogLevel || 'info');
+      logger.info('[Logger] Debug mode disabled via console');
+    }
+    return `Debug mode ${enabled ? 'enabled' : 'disabled'}. Refresh page to see full effect.`;
+  };
+  
+  // Helper to check current debug status
+  window.getDebugStatus = () => {
+    return {
+      currentLevel: log.getLevel(),
+      configLevel: logger.configLogLevel,
+      debugModeEnabled: localStorage.getItem('debug_mode') === 'true',
+      urlDebug: new URLSearchParams(window.location.search).get('debug') === 'true'
+    };
+  };
+  
+  console.log('%c[Jellynouncer Debug Console]', 'color: #9333ea; font-weight: bold; font-size: 14px');
+  console.log('%cDebug commands available:', 'color: #6b7280; font-weight: bold');
+  console.log('  setDebugMode(true)  - Enable debug logging');
+  console.log('  setDebugMode(false) - Disable debug logging');
+  console.log('  getDebugStatus()    - Check current debug settings');
+  console.log('  logger              - Access logger instance directly');
+}
+
 // Export both the logger instance and the log object for compatibility
+/**
+ * @type {ClientLogger & Logger}
+ * Logger instance with all logging methods:
+ * - debug(...args) - Log debug level messages
+ * - info(...args) - Log info level messages
+ * - warn(...args) - Log warning level messages
+ * - error(...args) - Log error level messages
+ * - startTimer(label) - Start a performance timer
+ * - And more utility methods...
+ */
 export default logger;
 export { log };

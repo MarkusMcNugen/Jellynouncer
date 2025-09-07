@@ -8,18 +8,28 @@ import logger from '../services/logger'
 // Removed unused lucide-react import - using FontAwesome icons instead
 
 const Logs = () => {
-  logger.info('[COMPONENT] Logs: Starting component initialization');
+  logger.info('[Logs] Component initialization started');
   
   const [logFile, setLogFile] = useState('jellynouncer.log')
   const [lines, setLines] = useState(500)
   const [availableLogFiles, setAvailableLogFiles] = useState([])
-  
-  logger.debug('[COMPONENT] Logs: State hooks initialized');
   const [level, setLevel] = useState('')
   const [component, setComponent] = useState('')
   const [search, setSearch] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [showStats] = useState(true) // Could be toggled in future
+  
+  logger.debug('[Logs] State hooks initialized', {
+    initialStates: {
+      logFile: 'jellynouncer.log',
+      lines: 500,
+      level: '',
+      component: '',
+      search: '',
+      autoRefresh: true,
+      showStats: true
+    }
+  })
   
   const listRef = useRef(null)
   const rowHeights = useRef({})
@@ -79,33 +89,54 @@ const Logs = () => {
   
   // Fetch available log files on component mount
   useEffect(() => {
+    logger.debug('[Logs] Fetching available log files');
+    
     apiService.getLogFiles()
       .then(response => {
         const files = response.data?.files || [];
         setAvailableLogFiles(files);
-        logger.info('Logs: Available log files fetched', { count: files.length });
+        
+        logger.info('[Logs] Available log files loaded', { 
+          count: files.length,
+          files: files.map(f => ({ name: f.name, size: f.size }))
+        });
         
         // If current file doesn't exist in list, switch to first available
         if (files.length > 0 && !files.find(f => f.name === logFile)) {
+          logger.debug('[Logs] Switching to first available log file', {
+            from: logFile,
+            to: files[0].name
+          });
           setLogFile(files[0].name);
         }
       })
       .catch(err => {
-        logger.error('Logs: Failed to fetch available log files', err);
+        logger.error('[Logs] Failed to fetch available log files', {
+          message: err.message,
+          response: err.response?.data
+        });
       });
+      
+    return () => {
+      logger.debug('[Logs] Component unmounting');
+    };
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   
   // Fetch logs - now using raw logs endpoint for better multi-line support
   const { data: logsResponse, refetch, isLoading } = useQuery({
     queryKey: ['logs', logFile, lines, level, component, search],
     queryFn: async () => {
-      logger.debug('Logs: Fetching raw logs', {
+      const fetchTimer = logger.startTimer('[Logs] Fetch log data');
+      logger.debug('[Logs] Fetching raw logs', {
         file: logFile,
         lines,
-        level,
-        component,
-        search
+        filters: {
+          level: level || 'none',
+          component: component || 'none',
+          search: search || 'none'
+        }
       });
+      
       try {
         const result = await apiService.getRawLogs({
           file: logFile,
@@ -114,14 +145,22 @@ const Logs = () => {
           component: component || undefined,
           search: search || undefined
         });
-        logger.info('Logs: Raw data received', {
+        
+        logger.info('[Logs] Raw log data received', {
           dataType: result?.data?.type,
           contentLength: result?.data?.content?.length || 0,
-          hasData: !!result?.data
+          hasData: !!result?.data,
+          linesReturned: result?.data?.content?.split('\n').length || 0
         });
+        
+        fetchTimer.end();
         return result;
       } catch (err) {
-        logger.error('Logs: Failed to fetch', err);
+        logger.error('[Logs] Failed to fetch logs', {
+          message: err.message,
+          response: err.response?.data,
+          file: logFile
+        });
         throw err;
       }
     },
@@ -130,7 +169,10 @@ const Logs = () => {
   
   // Parse and filter logs
   const { parsedLogs, stats } = useMemo(() => {
+    const parseTimer = logger.startTimer('[Logs] Parse and filter logs');
+    
     if (!logsResponse?.data) {
+      logger.debug('[Logs] No log data to parse');
       return { parsedLogs: [], stats: {} }
     }
     
@@ -160,6 +202,19 @@ const Logs = () => {
     const reversed = filtered.slice().reverse()
     const statistics = getLogStatistics(filtered)
     
+    logger.debug('[Logs] Parsing complete', {
+      rawLines: logText.split('\n').length,
+      parsedCount: parsed.length,
+      filteredCount: filtered.length,
+      statistics: {
+        errors: statistics.error || 0,
+        warnings: statistics.warning || 0,
+        info: statistics.info || 0,
+        debug: statistics.debug || 0
+      }
+    });
+    
+    parseTimer.end();
     return { parsedLogs: reversed, stats: statistics }
   }, [logsResponse, level, component, search])
   

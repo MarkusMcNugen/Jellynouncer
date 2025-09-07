@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiService } from '../services/api'
-import { IconDuotone, IconLight } from '../components/FontAwesomeIcon'
+import { IconDuotone, IconLight, IconSolid } from '../components/FontAwesomeIcon'
 import { parseLogText, filterLogs, getLogStatistics, formatLogForDisplay, exportLogs, LOG_LEVEL_COLORS } from '../utils/logParser'
 import { VariableSizeList as VirtualList } from 'react-window'
 import logger from '../services/logger'
@@ -450,7 +450,7 @@ const Logs = () => {
           />
           
           <div className="flex-1 relative">
-            <IconLight icon="magnifying-glass" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-text-muted" size="lg" />
+            <IconSolid icon="magnifying-glass" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-text-muted" size="lg" />
             <input 
               type="text"
               className="input pl-10 w-full"
@@ -474,7 +474,7 @@ const Logs = () => {
             <button className="btn btn-secondary flex items-center gap-2">
               <IconDuotone icon="download" size="sm" />
               Export
-              <IconLight icon="chevron-down" size="xs" />
+              <IconSolid icon="chevron-down" size="xs" />
             </button>
             <div className="absolute right-0 mt-1 w-32 bg-dark-elevated rounded-lg shadow-lg hidden group-hover:block z-10">
               <button 
@@ -588,7 +588,7 @@ const Logs = () => {
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <IconLight icon="circle-info" size="3x" className="text-dark-text-muted mx-auto mb-4" />
+              <IconSolid icon="circle-info" size="3x" className="text-dark-text-muted mx-auto mb-4" />
               <p className="text-dark-text-secondary">No logs found</p>
               <p className="text-sm text-dark-text-muted mt-2">
                 Try adjusting your filters or refreshing

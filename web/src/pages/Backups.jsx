@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import withLifecycleLogging from '../components/withLifecycleLogging'
-import { apiClient } from '../services/api'
-import { logger } from '../services/logger'
+import withLifecycleLogging from '../utils/withLifecycleLogging'
+import { apiService } from '../services/api'
+import logger from '../services/logger'
 
 function Backups() {
   const navigate = useNavigate()
@@ -44,13 +44,13 @@ function Backups() {
       logger.debug('Fetching backup data')
       
       // Fetch backup status
-      const statusResponse = await apiClient.get('/backup/status')
+      const statusResponse = await apiService.get('/backup/status')
       logger.debug('Backup status response:', statusResponse.data)
       setBackupStatus(statusResponse.data)
       setConfig(statusResponse.data.config || {})
       
       // Fetch backup list
-      const listResponse = await apiClient.get('/backup/list')
+      const listResponse = await apiService.get('/backup/list')
       logger.debug('Backup list response:', listResponse.data)
       setBackupList(listResponse.data.backups || [])
     } catch (error) {
@@ -72,7 +72,7 @@ function Backups() {
       setSaving(true)
       logger.debug('Saving backup configuration:', config)
       
-      await apiClient.put('/backup/config', config)
+      await apiService.put('/backup/config', config)
       logger.info('Backup configuration saved successfully')
       
       // Refresh status
@@ -93,7 +93,7 @@ function Backups() {
       const formData = new FormData()
       formData.append('description', createDescription || 'Manual backup')
       
-      const response = await apiClient.post('/backup/create', formData)
+      const response = await apiService.post('/backup/create', formData)
       logger.info('Backup created successfully:', response.data)
       
       alert('Backup created successfully: ' + response.data.backup.filename)
@@ -124,7 +124,7 @@ function Backups() {
       logger.debug('Restoring backup:', selectedBackup)
       
       const components = Object.keys(restoreComponents).filter(key => restoreComponents[key])
-      const response = await apiClient.post(`/backup/restore/${selectedBackup}`, null, {
+      const response = await apiService.post(`/backup/restore/${selectedBackup}`, null, {
         params: { components }
       })
       
@@ -149,7 +149,7 @@ function Backups() {
     try {
       logger.debug('Deleting backup:', backupName)
       
-      await apiClient.delete(`/backup/${backupName}`)
+      await apiService.delete(`/backup/${backupName}`)
       logger.info('Backup deleted successfully')
       
       // Refresh list
@@ -165,7 +165,7 @@ function Backups() {
       setSaving(true)
       logger.debug('Testing backup system')
       
-      const response = await apiClient.post('/backup/test')
+      const response = await apiService.post('/backup/test')
       logger.info('Backup system test completed:', response.data)
       
       alert('Backup system test completed successfully!')

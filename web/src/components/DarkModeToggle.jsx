@@ -41,13 +41,13 @@ const DarkModeToggle = () => {
   const getThemeIcon = () => {
     switch (theme) {
       case 'dark':
-        return ['fas', 'moon'];
+        return 'moon';
       case 'light':
-        return ['fas', 'sun'];
+        return 'sun';
       case 'auto':
-        return ['fas', 'adjust'];
+        return 'circle-half-stroke';  // FA7 icon for auto/adjust
       default:
-        return ['fas', 'adjust'];
+        return 'circle-half-stroke';
     }
   };
 

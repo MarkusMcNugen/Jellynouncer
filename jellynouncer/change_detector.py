@@ -102,7 +102,7 @@ class ChangeDetector:
         notifications_config = NotificationsConfig(
             watch_changes={
                 'resolution': True,      # Monitor resolution upgrades
-                'codec': True,          # Monitor codec improvements
+                'video_codec': True,     # Monitor video codec improvements
                 'audio_codec': True,    # Monitor audio upgrades
                 'hdr_status': True,     # Monitor HDR changes
                 'file_size': False      # Ignore file size changes
@@ -161,7 +161,7 @@ class ChangeDetector:
         The NotificationsConfig includes a watch_changes dictionary that controls
         which change types are monitored:
         - 'resolution': Video resolution changes (720p → 1080p)
-        - 'codec': Video codec changes (h264 → hevc)
+        - 'video_codec': Video codec changes (h264 → hevc)
         - 'audio_codec': Audio codec changes (ac3 → dts)
         - 'audio_channels': Audio channel count changes (2 → 6)
         - 'hdr_status': HDR format changes (SDR → HDR10)
@@ -178,7 +178,7 @@ class ChangeDetector:
             config = NotificationsConfig(
                 watch_changes={
                     'resolution': True,      # Always notify for resolution upgrades
-                    'codec': True,          # Notify for codec improvements
+                    'video_codec': True,     # Notify for video codec improvements
                     'audio_codec': True,    # Audio improvements are important
                     'audio_channels': True, # Surround sound upgrades
                     'hdr_status': True,     # HDR upgrades for compatible displays
@@ -245,7 +245,7 @@ class ChangeDetector:
 
                 if change_type == 'resolution':
                     logger.info(f"Quality upgrade: {description}")
-                elif change_type == 'codec':
+                elif change_type == 'video_codec':
                     logger.info(f"Codec improvement: {description}")
                 elif change_type == 'audio_codec':
                     logger.info(f"Audio upgrade: {description}")
@@ -273,11 +273,11 @@ class ChangeDetector:
                 })
 
             # Video codec changes (compression and efficiency improvements)
-            if (self.watch_changes.get('codec', True) and
+            if (self.watch_changes.get('video_codec', True) and
                     old_item.video_codec != new_item.video_codec and
                     (old_item.video_codec or new_item.video_codec)):
                 changes.append({
-                    'type': 'codec',
+                    'type': 'video_codec',
                     'field': 'video_codec',
                     'old_value': old_item.video_codec,
                     'new_value': new_item.video_codec,
@@ -552,7 +552,7 @@ class ChangeDetector:
             # Group changes by category for better readability
             change_categories = {
                 'resolution': [],
-                'codec': [],
+                'video_codec': [],
                 'audio_codec': [],
                 'audio_channels': [],
                 'hdr_status': [],
@@ -567,7 +567,7 @@ class ChangeDetector:
                     change_categories[change_type].append(change)
 
             # Build summary with prioritized order (most important first)
-            priority_order = ['resolution', 'hdr_status', 'codec', 'audio_codec', 'audio_channels', 'subtitles', 'file_size']
+            priority_order = ['resolution', 'hdr_status', 'video_codec', 'audio_codec', 'audio_channels', 'subtitles', 'file_size']
 
             for category in priority_order:
                 category_changes = change_categories[category]
@@ -582,7 +582,7 @@ class ChangeDetector:
                     for change in category_changes:
                         summary_parts.append(f"HDR upgrade ({change['old_value']} → {change['new_value']})")
 
-                elif category == 'codec':
+                elif category == 'video_codec':
                     for change in category_changes:
                         summary_parts.append(f"Codec improvement ({change['old_value']} → {change['new_value']})")
 

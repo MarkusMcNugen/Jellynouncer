@@ -571,10 +571,12 @@ class NotificationsConfig(BaseModel):
         notifications = NotificationsConfig(
             watch_changes={
                 "resolution": True,      # Monitor resolution changes
-                "codec": True,          # Monitor video codec changes
+                "video_codec": True,     # Monitor video codec changes
                 "audio_codec": False,   # Ignore audio codec changes
+                "audio_channels": True,  # Monitor audio channel changes
                 "hdr_status": True,     # Monitor HDR changes
-                "file_size": False      # Ignore file size changes
+                "file_size": False,     # Ignore file size changes
+                "subtitles": True       # Monitor subtitle changes
             },
             colors={
                 "new_item": 0x00FF00,           # Green for new items
@@ -1286,6 +1288,9 @@ class ConfigurationValidator:
 
             # Step 2: Apply environment variable overrides
             self._apply_env_overrides(config_data)
+            
+            # Step 2.5: Ensure all watch_changes fields are present with proper defaults
+            self._ensure_watch_changes_defaults(config_data)
 
             # Step 3: Validate using Pydantic models (automatic type conversion and validation)
             config = AppConfig(**config_data)
@@ -1453,6 +1458,45 @@ class ConfigurationValidator:
                     if key not in webhook_config:
                         webhook_config[key] = value
 
+    def _ensure_watch_changes_defaults(self, config_data: Dict[str, Any]) -> None:
+        """
+        Ensure all watch_changes fields are present in the configuration.
+        
+        This prevents issues where missing fields are not displayed in the web UI.
+        """
+        # Define all expected watch_changes fields with their defaults
+        default_watch_changes = {
+            'resolution': True,
+            'video_codec': True,  # Renamed from 'codec' for clarity
+            'audio_codec': True,
+            'audio_channels': True,
+            'hdr_status': True,
+            'file_size': False,
+            'subtitles': True
+        }
+        
+        # Handle legacy 'codec' field - rename to 'video_codec'
+        if 'notifications' in config_data and 'watch_changes' in config_data['notifications']:
+            watch_changes = config_data['notifications']['watch_changes']
+            if 'codec' in watch_changes and 'video_codec' not in watch_changes:
+                self.logger.info("Migrating 'codec' to 'video_codec' in watch_changes")
+                watch_changes['video_codec'] = watch_changes.pop('codec')
+        
+        # Ensure notifications section exists
+        if 'notifications' not in config_data:
+            config_data['notifications'] = {}
+        
+        # Ensure watch_changes exists
+        if 'watch_changes' not in config_data['notifications']:
+            config_data['notifications']['watch_changes'] = {}
+        
+        # Apply defaults for any missing fields
+        watch_changes = config_data['notifications']['watch_changes']
+        for field, default_value in default_watch_changes.items():
+            if field not in watch_changes:
+                self.logger.debug(f"Adding missing watch_changes field '{field}' with default value {default_value}")
+                watch_changes[field] = default_value
+    
     def _validate_jellyfin_config(self, jellyfin_config: JellyfinConfig) -> None:
         """
         Validate Jellyfin configuration and perform additional checks.

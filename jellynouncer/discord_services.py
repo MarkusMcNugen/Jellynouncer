@@ -1096,8 +1096,8 @@ class DiscordNotifier:
                 change_type = change.get('type', '')
                 if change_type == 'resolution':
                     return colors.get("resolution_upgrade", 16766720)  # Orange
-                elif change_type == 'codec':
-                    return colors.get("codec_upgrade", 16747520)  # Yellow
+                elif change_type == 'video_codec':
+                    return colors.get("codec_upgrade", 16747520)  # Yellow - keeping color key for backwards compatibility
                 elif change_type in ['audio_codec', 'audio_channels']:
                     return colors.get("audio_upgrade", 9662683)  # Purple
                 elif change_type == 'hdr_status':

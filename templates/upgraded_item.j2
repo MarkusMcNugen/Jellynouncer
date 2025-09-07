@@ -13,7 +13,7 @@
   Change Types Supported:
   ----------------------
   - resolution: Video resolution upgrade
-  - codec: Video codec change
+  - video_codec: Video codec change
   - audio_codec: Audio codec upgrade
   - audio_channels: Channel configuration upgrade
   - hdr_status: HDR upgrade
@@ -87,7 +87,7 @@
           {
             "name": "{% if change.type == 'resolution' -%}
               📐 Resolution Upgrade
-            {%- elif change.type == 'codec' -%}
+            {%- elif change.type == 'video_codec' -%}
               🎞️ Video Codec Upgrade
             {%- elif change.type == 'audio_codec' -%}
               🔊 Audio Codec Upgrade

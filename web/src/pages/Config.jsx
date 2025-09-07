@@ -829,7 +829,8 @@ const Config = () => {
                         onChange={(e) => handleInputChange('metadata_services', 'tmdb', e.target.checked, 'enabled')}
                         className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                       />
-                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Enabled</span>
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Enabled </span>
+                      <Tooltip text={configDescriptions.metadata_services.tmdb.enabled} />
                     </label>
                   </div>
                   <div>
@@ -858,7 +859,8 @@ const Config = () => {
                         onChange={(e) => handleInputChange('metadata_services', 'tvdb', e.target.checked, 'enabled')}
                         className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                       />
-                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Enabled</span>
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Enabled </span>
+                      <Tooltip text={configDescriptions.metadata_services.tvdb.enabled} />
                     </label>
                   </div>
                   <div>
@@ -1007,7 +1009,8 @@ const Config = () => {
                     onChange={(e) => handleInputChange('server', 'development_mode', e.target.checked)}
                     className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Development Mode</span>
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Development Mode </span>
+                  <Tooltip text={configDescriptions.server.development_mode} />
                 </label>
                 <label className="inline-flex items-center">
                   <input
@@ -1016,7 +1019,8 @@ const Config = () => {
                     onChange={(e) => handleInputChange('server', 'show_docker_interfaces', e.target.checked)}
                     className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Show Docker Interfaces</span>
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Show Docker Interfaces </span>
+                  <Tooltip text={configDescriptions.server.show_docker_interfaces} />
                 </label>
                 <label className="inline-flex items-center">
                   <input
@@ -1025,7 +1029,8 @@ const Config = () => {
                     onChange={(e) => handleInputChange('server', 'force_color_output', e.target.checked)}
                     className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Force Color Output</span>
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Force Color Output </span>
+                  <Tooltip text={configDescriptions.server.force_color_output} />
                 </label>
                 <label className="inline-flex items-center">
                   <input
@@ -1034,7 +1039,8 @@ const Config = () => {
                     onChange={(e) => handleInputChange('server', 'disable_color_output', e.target.checked)}
                     className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Disable Color Output</span>
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Disable Color Output </span>
+                  <Tooltip text={configDescriptions.server.disable_color_output} />
                 </label>
               </div>
             </div>
@@ -1240,9 +1246,11 @@ const Config = () => {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Template Directory
-                  </label>
+                  <LabelWithTooltip 
+                    label="Template Directory"
+                    tooltip={configDescriptions.templates.directory}
+                    className="block"
+                  />
                   <input
                     type="text"
                     value={config.templates.directory}
@@ -1259,9 +1267,11 @@ const Config = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {Object.entries(config.templates).filter(([key]) => key !== 'directory').map(([key, value]) => (
                     <div key={key}>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </label>
+                      <LabelWithTooltip 
+                        label={key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        tooltip={configDescriptions.templates[key]}
+                        className="block"
+                      />
                       <input
                         type="text"
                         value={value}

@@ -51,11 +51,11 @@ export const configDescriptions = {
   notifications: {
     watch_changes: {
       resolution: "Notify when video resolution improves (720p → 1080p → 4K).",
-      codec: "Notify when video codec improves (H.264 → H.265/HEVC).",
+      video_codec: "Notify when video codec improves (H.264 → H.265/HEVC).",
       audio_codec: "Notify when audio codec changes (AAC → DTS → TrueHD).",
       audio_channels: "Notify when audio channels increase (Stereo → 5.1 → 7.1).",
       hdr_status: "Notify when HDR is added (SDR → HDR10 → Dolby Vision).",
-      file_size: "Notify when file size changes significantly.",
+      file_size: "Notify when file size changes significantly (>10% difference).",
       subtitles: "Notify when subtitle tracks are added or changed (language/format)."
     },
     colors: {
@@ -97,7 +97,11 @@ export const configDescriptions = {
     host: "Network interface to bind. Use 0.0.0.0 for all interfaces.",
     port: "Port for webhook service. Jellyfin sends webhooks here.",
     log_level: "Logging verbosity: DEBUG (everything), INFO (normal), WARNING (issues), ERROR (problems only).",
-    run_mode: "Which services to run: all (both), webhook (notifications only), web (interface only)."
+    run_mode: "Which services to run: all (both), webhook (notifications only), web (interface only).",
+    development_mode: "Enable development features like debug endpoints and verbose errors.",
+    show_docker_interfaces: "Display Docker network interfaces in logs and UI. Useful for container debugging.",
+    force_color_output: "Force colored console output even in non-TTY environments like Docker logs.",
+    disable_color_output: "Disable all colored output for compatibility with log parsers."
   },
   
   web_interface: {
@@ -135,6 +139,19 @@ export const configDescriptions = {
     pfx_path: "Path to PFX/PKCS12 certificate bundle (alternative to separate files).",
     pfx_password: "Password for PFX certificate file.",
     port: "HTTPS port for secure web interface."
+  },
+  
+  templates: {
+    directory: "Folder where Jinja2 template files are stored.",
+    new_item_template: "Template for single new item notifications. Used when adding individual media.",
+    upgraded_item_template: "Template for quality upgrade notifications. Used when media is replaced with better quality.",
+    deleted_item_template: "Template for deletion notifications. Used when media is removed from library.",
+    new_items_by_event_template: "Template for batch new items by event. Groups multiple additions from same scan.",
+    upgraded_items_by_event_template: "Template for batch upgrades by event. Groups multiple upgrades from same scan.",
+    new_items_by_type_template: "Template for new items grouped by type. Organizes additions by Movies/TV/Music.",
+    upgraded_items_by_type_template: "Template for upgrades grouped by type. Organizes upgrades by Movies/TV/Music.",
+    new_items_grouped_template: "Template for smart grouped new items. Intelligently batches similar content.",
+    upgraded_items_grouped_template: "Template for smart grouped upgrades. Intelligently batches similar upgrades."
   }
 };
 

@@ -107,12 +107,12 @@
   "notifications": {
     "watch_changes": {
       "resolution": true,
-      "codec": true,
+      "video_codec": true,
       "audio_codec": true,
       "audio_channels": true,
       "hdr_status": true,
       "file_size": false,
-      "subtitles": false
+      "subtitles": true
     },
     "colors": {
       "new_item": 65280,

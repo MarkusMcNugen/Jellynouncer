@@ -325,67 +325,77 @@ async def receive_webhook(request: Request):
             
             if settings.get("require_webhook_auth", False):
                 # Check for authorization header
-                auth_header = request.headers.get("authorization")
-                if not auth_header or not auth_header.startswith("Bearer "):
-                    if webhook_service and webhook_service.logger:
-                        webhook_service.logger.warning("Webhook authentication required but no valid token provided")
-                    raise HTTPException(
-                        status_code=401,
-                        detail="Authentication required for webhook endpoint"
-                    )
+                auth_header = request.headers.get("authorization", "")
+                client_ip = request.client.host if request.client else None
+                authenticated = False
+                auth_method = None
                 
-                # Validate the token (same tokens as web interface)
-                token = auth_header.replace("Bearer ", "")
-                try:
-                    import jwt
-                    from datetime import datetime
-                except ImportError:
-                    jwt = None
-                    if webhook_service and webhook_service.logger:
-                        webhook_service.logger.error("JWT library not available for webhook authentication")
-                    raise HTTPException(
-                        status_code=500,
-                        detail="JWT authentication not available"
-                    )
-                
-                try:
-                    # Get JWT secret from environment or config
-                    jwt_secret = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
-                    payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-                    
-                    # Accept both access tokens and refresh tokens for webhook auth
-                    token_type = payload.get("type")
-                    if token_type not in ["access", "refresh"]:
+                # Try API Key authentication first (most common for webhooks)
+                if auth_header.startswith("ApiKey "):
+                    api_key = auth_header[7:].strip()
+                    key_info = await web_db.validate_webhook_api_key(api_key, client_ip)
+                    if key_info:
+                        authenticated = True
+                        auth_method = f"API Key: {key_info['name']}"
                         if webhook_service and webhook_service.logger:
-                            webhook_service.logger.warning(f"Invalid token type for webhook access: {token_type}")
-                        raise HTTPException(
-                            status_code=403,
-                            detail="Invalid token type for webhook access"
-                        )
+                            webhook_service.logger.info(f"Webhook authenticated via API key '{key_info['name']}' (usage #{key_info['usage_count']})")
+                
+                # Try Bearer token (JWT) authentication
+                elif auth_header.startswith("Bearer "):
+                    token = auth_header[7:].strip()
+                    try:
+                        import jwt
+                        from datetime import datetime
+                    except ImportError:
+                        jwt = None
+                        if webhook_service and webhook_service.logger:
+                            webhook_service.logger.error("JWT library not available for webhook authentication")
                     
-                    # Log successful authentication
-                    username = payload.get("username", "unknown")
+                    if jwt:
+                        try:
+                            # Get JWT secret from environment or config
+                            jwt_secret = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
+                            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+                            
+                            # Accept both access tokens and refresh tokens for webhook auth
+                            token_type = payload.get("type")
+                            if token_type in ["access", "refresh"]:
+                                authenticated = True
+                                auth_method = f"JWT ({token_type}): {payload.get('username', 'unknown')}"
+                                if webhook_service and webhook_service.logger:
+                                    webhook_service.logger.info(f"Webhook authenticated via JWT for user: {payload.get('username', 'unknown')}")
+                            else:
+                                if webhook_service and webhook_service.logger:
+                                    webhook_service.logger.warning(f"Invalid token type for webhook access: {token_type}")
+                        
+                        except jwt.ExpiredSignatureError:
+                            if webhook_service and webhook_service.logger:
+                                webhook_service.logger.warning("Webhook JWT token has expired")
+                        except jwt.InvalidTokenError as jwt_error:
+                            if webhook_service and webhook_service.logger:
+                                webhook_service.logger.warning(f"Invalid webhook JWT token: {str(jwt_error)}")
+                
+                # Check if authentication was successful
+                if not authenticated:
                     if webhook_service and webhook_service.logger:
-                        webhook_service.logger.info(f"Webhook authenticated successfully for user: {username}")
-                    
-                except jwt.ExpiredSignatureError:
-                    if webhook_service and webhook_service.logger:
-                        webhook_service.logger.warning("Webhook token has expired")
+                        webhook_service.logger.warning(f"Webhook authentication required but no valid credentials provided from IP: {client_ip}")
                     raise HTTPException(
                         status_code=401,
-                        detail="Token has expired"
+                        detail="Authentication required for webhook endpoint. Use 'ApiKey' or 'Bearer' authorization header.",
+                        headers={"WWW-Authenticate": "ApiKey, Bearer"}
                     )
-                except jwt.InvalidTokenError as jwt_error:
-                    if webhook_service and webhook_service.logger:
-                        webhook_service.logger.warning(f"Invalid webhook token: {str(jwt_error)}")
-                    raise HTTPException(
-                        status_code=401,
-                        detail="Invalid authentication token"
-                    )
+                
+                # Log successful authentication
+                if webhook_service and webhook_service.logger:
+                    webhook_service.logger.debug(f"Webhook authenticated successfully via {auth_method}")
+                    
+        except HTTPException:
+            # Re-raise HTTP exceptions
+            raise
         except Exception as auth_error:
             if webhook_service and webhook_service.logger:
                 webhook_service.logger.error(f"Error checking webhook auth: {str(auth_error)}")
-            # Don't block webhooks if auth check fails
+            # Don't block webhooks if auth check fails unexpectedly
             pass
 
     try:

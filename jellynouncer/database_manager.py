@@ -925,6 +925,54 @@ class DatabaseManager:
             self.logger.error(f"Failed to get database stats: {e}")
             return {}
 
+    async def get_recent_changes(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get the most recently added or modified items from the database.
+
+        This method retrieves items ordered by their creation timestamp, useful for
+        showing recent activity in dashboards or monitoring interfaces.
+
+        Args:
+            limit: Maximum number of items to return (default: 10)
+
+        Returns:
+            List[Dict[str, Any]]: List of recent items with their details
+
+        Example:
+            ```python
+            recent = await db_manager.get_recent_changes(limit=5)
+            for item in recent:
+                logger.info(f"Recent: {item['name']} ({item['item_type']})")
+            ```
+        """
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                self._connection_count += 1
+                db.row_factory = aiosqlite.Row
+
+                # Get recent items ordered by timestamp
+                cursor = await db.execute("""
+                    SELECT 
+                        item_id as id,
+                        name,
+                        item_type as media_type,
+                        timestamp_created as last_updated,
+                        'added' as last_event
+                    FROM media_items
+                    ORDER BY timestamp_created DESC
+                    LIMIT ?
+                """, (limit,))
+                
+                rows = await cursor.fetchall()
+                recent_items = [dict(row) for row in rows]
+                
+                self._connection_count -= 1
+                return recent_items
+
+        except Exception as e:
+            self.logger.error(f"Failed to get recent changes: {e}")
+            return []
+
     async def update_last_sync_time(self) -> None:
         """
         Update the last sync time in the database.

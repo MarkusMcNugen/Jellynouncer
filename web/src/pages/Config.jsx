@@ -19,6 +19,7 @@ import {
 import { apiService } from '../services/api';
 import { apiClient } from '../utils/apiClient';
 import WebhookTokenDisplay from '../components/WebhookTokenDisplay';
+import WebhookApiKeys from '../components/WebhookApiKeys';
 import Tooltip from '../components/Tooltip';
 import LabelWithTooltip from '../components/LabelWithTooltip';
 import { configDescriptions } from '../utils/configDescriptions';
@@ -1114,19 +1115,28 @@ const Config = () => {
                   {config.web_interface.require_webhook_auth && (
                     <div className="mt-2 space-y-2">
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Jellyfin webhooks must include a Bearer token with the same credentials
+                        Webhooks must authenticate using API Keys or JWT tokens
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setShowWebhookToken(true)}
-                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                      >
-                        <KeyIcon className="h-3 w-3 mr-1.5" />
-                        View Webhook Token
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowWebhookToken(true)}
+                          className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                        >
+                          <KeyIcon className="h-3 w-3 mr-1.5" />
+                          View JWT Token
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
+                
+                {/* Webhook API Keys Section */}
+                {config.web_interface.require_webhook_auth && (
+                  <div className="col-span-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <WebhookApiKeys />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Host

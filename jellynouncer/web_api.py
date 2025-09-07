@@ -1412,7 +1412,33 @@ class WebInterfaceService:
             if section not in config_data:
                 config_data[section] = {}
             
-            config_data[section][key] = value
+            # Check if this value is from environment variable
+            env_var_map = {
+                ('jellyfin', 'api_key'): 'JELLYFIN_API_KEY',
+                ('jellyfin', 'server_url'): 'JELLYFIN_SERVER_URL',
+                ('jellyfin', 'user_id'): 'JELLYFIN_USER_ID',
+                ('metadata_services.omdb', 'api_key'): 'OMDB_API_KEY',
+                ('metadata_services.tmdb', 'api_key'): 'TMDB_API_KEY',
+                ('metadata_services.tvdb', 'api_key'): 'TVDB_API_KEY',
+                ('web_interface', 'jwt_secret'): 'JWT_SECRET_KEY',
+                ('discord.webhooks.default', 'url'): 'DISCORD_WEBHOOK_URL',
+            }
+            
+            env_var = env_var_map.get((section, key))
+            is_from_env = env_var and os.environ.get(env_var) is not None
+            
+            if value == "**HIDDEN**":
+                if is_from_env:
+                    # It's OK to save **HIDDEN** because env var takes precedence
+                    self.logger.debug(f"Saving hidden placeholder for {section}.{key} (env var overrides)")
+                    config_data[section][key] = value
+                else:
+                    # Preserve the existing value from config
+                    self.logger.debug(f"Preserving existing value for {section}.{key} (not from env var)")
+                    # Don't update the value, keep what's there
+            else:
+                # Update with the new value
+                config_data[section][key] = value
             
             # Validate the new configuration using Pydantic model
             from jellynouncer.config_models import AppConfig
@@ -2093,6 +2119,97 @@ async def register(user_create: UserCreate, current_user: Optional[Dict] = Depen
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+# ==================== Webhook API Key Management ====================
+
+@app.get("/api/webhook-keys")
+async def get_webhook_api_keys(current_user: Optional[Dict] = Depends(check_auth_required)):
+    """Get all webhook API keys"""
+    logger.debug(f"Webhook API keys requested by user: {current_user.get('username') if current_user else 'anonymous'}")
+    
+    try:
+        keys = await web_service.web_db.get_webhook_api_keys()
+        logger.debug(f"Returning {len(keys)} webhook API keys")
+        return {"keys": keys}
+    except Exception as e:
+        logger.error(f"Failed to get webhook API keys: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve API keys")
+
+
+@app.post("/api/webhook-keys")
+async def create_webhook_api_key(
+    request: Dict[str, str],
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Create a new webhook API key"""
+    name = request.get("name", "").strip()
+    description = request.get("description", "").strip() or None
+    
+    if not name:
+        raise HTTPException(status_code=400, detail="API key name is required")
+    
+    if len(name) > 100:
+        raise HTTPException(status_code=400, detail="API key name must be 100 characters or less")
+    
+    try:
+        # Create the API key
+        created_by = current_user.get("user_id") if current_user else None
+        key_info = await web_service.web_db.create_webhook_api_key(name, description, created_by)
+        
+        logger.info(f"Created webhook API key '{name}' (ID: {key_info['id']}) by user: {current_user.get('username') if current_user else 'system'}")
+        
+        # Log audit event if user is authenticated
+        if current_user:
+            await web_service.web_db.log_audit(
+                current_user.get("user_id"),
+                "webhook_api_key_created",
+                f"Created webhook API key: {name}",
+                {"key_id": key_info["id"], "name": name}
+            )
+        
+        return {
+            "success": True,
+            "key": key_info["key"],  # Return the actual key only on creation
+            "id": key_info["id"],
+            "name": key_info["name"],
+            "message": "API key created successfully. Save this key securely - it cannot be viewed again."
+        }
+    except Exception as e:
+        logger.error(f"Failed to create webhook API key: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create API key")
+
+
+@app.delete("/api/webhook-keys/{key_id}")
+async def revoke_webhook_api_key(
+    key_id: int,
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Revoke a webhook API key"""
+    try:
+        revoked_by = current_user.get("user_id") if current_user else None
+        success = await web_service.web_db.revoke_webhook_api_key(key_id, revoked_by)
+        
+        if success:
+            logger.info(f"Revoked webhook API key ID: {key_id} by user: {current_user.get('username') if current_user else 'system'}")
+            
+            # Log audit event if user is authenticated
+            if current_user:
+                await web_service.web_db.log_audit(
+                    current_user.get("user_id"),
+                    "webhook_api_key_revoked",
+                    f"Revoked webhook API key ID: {key_id}",
+                    {"key_id": key_id}
+                )
+            
+            return {"success": True, "message": "API key revoked successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="API key not found or already revoked")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to revoke webhook API key: {e}")
+        raise HTTPException(status_code=500, detail="Failed to revoke API key")
+
+
 @app.get("/api/overview", response_model=OverviewStats)
 async def get_overview(current_user: Optional[Dict] = Depends(check_auth_required)):
     """Get overview statistics"""
@@ -2165,14 +2282,72 @@ async def update_full_config(
     try:
         # Load current config
         config_path = Path("config/config.json")
+        with open(config_path, 'r') as f:
+            current_config = json.load(f)
         
-        # Validate the new configuration using Pydantic model
+        # Merge configs, preserving actual values where frontend sends "**HIDDEN**"
+        def merge_configs(current: Dict, new: Dict, path: str = "") -> Dict:
+            """Recursively merge configs, preserving values marked as hidden"""
+            result = {}
+            
+            # Environment variable mappings for checking if values come from env
+            env_var_map = {
+                'jellyfin.api_key': 'JELLYFIN_API_KEY',
+                'jellyfin.server_url': 'JELLYFIN_SERVER_URL',
+                'jellyfin.user_id': 'JELLYFIN_USER_ID',
+                'metadata_services.omdb.api_key': 'OMDB_API_KEY',
+                'metadata_services.tmdb.api_key': 'TMDB_API_KEY',
+                'metadata_services.tvdb.api_key': 'TVDB_API_KEY',
+                'web_interface.jwt_secret': 'JWT_SECRET_KEY',
+                'discord.webhooks.default.url': 'DISCORD_WEBHOOK_URL',
+                'discord.webhooks.movies.url': 'DISCORD_WEBHOOK_MOVIES_URL',
+                'discord.webhooks.tv.url': 'DISCORD_WEBHOOK_TV_URL',
+                'discord.webhooks.music.url': 'DISCORD_WEBHOOK_MUSIC_URL',
+            }
+            
+            for key, new_value in new.items():
+                current_path = f"{path}.{key}" if path else key
+                
+                if key not in current:
+                    # New key, use the new value
+                    result[key] = new_value
+                elif isinstance(new_value, dict) and isinstance(current.get(key), dict):
+                    # Both are dicts, recursively merge
+                    result[key] = merge_configs(current[key], new_value, current_path)
+                elif new_value == "**HIDDEN**":
+                    # Check if this field is from environment variable
+                    env_var = env_var_map.get(current_path)
+                    is_from_env = env_var and os.environ.get(env_var) is not None
+                    
+                    if is_from_env:
+                        # It's OK to save **HIDDEN** because env var takes precedence
+                        result[key] = new_value
+                        logger.debug(f"Saving hidden placeholder for {current_path} (env var overrides)")
+                    else:
+                        # Preserve the existing value from config
+                        result[key] = current[key]
+                        logger.debug(f"Preserving existing value for {current_path} (not from env var)")
+                else:
+                    # Use the new value
+                    result[key] = new_value
+            
+            # Include any keys from current that aren't in new (shouldn't happen but be safe)
+            for key in current:
+                if key not in result:
+                    result[key] = current[key]
+            
+            return result
+        
+        # Merge the configurations
+        merged_config = merge_configs(current_config, config_data)
+        
+        # Validate the merged configuration using Pydantic model
         from jellynouncer.config_models import AppConfig
-        validated_config = AppConfig(**config_data)
+        validated_config = AppConfig(**merged_config)
         
-        # Save the updated config
+        # Save the merged config (with actual values, not hidden placeholders)
         with open(config_path, 'w') as f:
-            json.dump(config_data, f, indent=2)
+            json.dump(merged_config, f, indent=2)
         
         # Update in-memory config
         web_service.config = validated_config

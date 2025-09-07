@@ -54,6 +54,30 @@ class WebDatabaseManager:
             """)
             
             # Create notification statistics table for historical data
+            # Create webhook API keys table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS webhook_api_keys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    key_hash TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_used TIMESTAMP,
+                    active BOOLEAN DEFAULT 1,
+                    created_by INTEGER,
+                    revoked_at TIMESTAMP,
+                    revoked_by INTEGER,
+                    usage_count INTEGER DEFAULT 0,
+                    last_ip TEXT
+                )
+            """)
+            
+            # Create index for key lookups
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_webhook_api_keys_hash 
+                ON webhook_api_keys(key_hash) WHERE active = 1
+            """)
+            
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS notification_stats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -496,3 +520,147 @@ class WebDatabaseManager:
         # Also record the event type
         if event_type in ["new", "upgraded", "deleted"]:
             await self.record_webhook_event(event_type, item_type)
+    
+    # ==================== API Key Management ====================
+    
+    async def create_webhook_api_key(self, name: str, description: str = None, created_by: int = None) -> Dict[str, str]:
+        """
+        Create a new API key for webhook authentication.
+        
+        Returns dict with 'id', 'key' (actual key), and 'name'
+        """
+        import secrets
+        import hashlib
+        from datetime import datetime
+        
+        if not self.initialized:
+            await self.initialize()
+        
+        # Generate secure API key
+        api_key = f"wh_{secrets.token_urlsafe(32)}"
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                INSERT INTO webhook_api_keys (name, key_hash, description, created_by)
+                VALUES (?, ?, ?, ?)
+            """, (name, key_hash, description, created_by))
+            
+            conn.commit()
+            key_id = cursor.lastrowid
+        
+        logger.info(f"Created new webhook API key: {name} (ID: {key_id})")
+        
+        return {
+            "id": key_id,
+            "key": api_key,  # Return actual key only on creation
+            "name": name
+        }
+    
+    async def validate_webhook_api_key(self, api_key: str, client_ip: str = None) -> Optional[Dict[str, Any]]:
+        """
+        Validate an API key and update usage statistics.
+        
+        Returns key info if valid, None otherwise
+        """
+        import hashlib
+        from datetime import datetime
+        
+        if not self.initialized:
+            await self.initialize()
+        
+        # Hash the provided key
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            # Find matching active key
+            cursor = conn.execute("""
+                SELECT id, name, description, created_at, usage_count
+                FROM webhook_api_keys
+                WHERE key_hash = ? AND active = 1
+            """, (key_hash,))
+            
+            key_info = cursor.fetchone()
+            
+            if key_info:
+                # Update usage statistics
+                conn.execute("""
+                    UPDATE webhook_api_keys
+                    SET last_used = CURRENT_TIMESTAMP,
+                        usage_count = usage_count + 1,
+                        last_ip = ?
+                    WHERE id = ?
+                """, (client_ip, key_info['id']))
+                
+                conn.commit()
+                
+                logger.debug(f"API key validated: {key_info['name']} (usage #{key_info['usage_count'] + 1})")
+                
+                return {
+                    "id": key_info['id'],
+                    "name": key_info['name'],
+                    "description": key_info['description'],
+                    "created_at": key_info['created_at'],
+                    "usage_count": key_info['usage_count'] + 1
+                }
+        
+        logger.warning(f"Invalid API key attempted from IP: {client_ip}")
+        return None
+    
+    async def get_webhook_api_keys(self) -> list:
+        """Get all API keys (without actual key values)"""
+        if not self.initialized:
+            await self.initialize()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            cursor = conn.execute("""
+                SELECT id, name, description, created_at, last_used, 
+                       active, usage_count, last_ip
+                FROM webhook_api_keys
+                WHERE active = 1
+                ORDER BY created_at DESC
+            """)
+            
+            keys = []
+            for row in cursor:
+                keys.append({
+                    "id": row['id'],
+                    "name": row['name'],
+                    "description": row['description'],
+                    "created_at": row['created_at'],
+                    "last_used": row['last_used'],
+                    "usage_count": row['usage_count'],
+                    "last_ip": row['last_ip']
+                })
+        
+        return keys
+    
+    async def revoke_webhook_api_key(self, key_id: int, revoked_by: int = None) -> bool:
+        """Revoke an API key"""
+        if not self.initialized:
+            await self.initialize()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                UPDATE webhook_api_keys
+                SET active = 0,
+                    revoked_at = CURRENT_TIMESTAMP,
+                    revoked_by = ?
+                WHERE id = ? AND active = 1
+            """, (revoked_by, key_id))
+            
+            conn.commit()
+            
+            if cursor.rowcount > 0:
+                logger.info(f"Revoked webhook API key ID: {key_id}")
+                return True
+        
+        return False
+    
+    async def log_audit(self, user_id: int, action: str, description: str, metadata: Dict = None):
+        """Log audit event (placeholder for future implementation)"""
+        logger.info(f"Audit: User {user_id} performed {action}: {description}")

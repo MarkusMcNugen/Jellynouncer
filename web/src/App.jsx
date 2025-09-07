@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Overview from './pages/Overview'
 import Config from './pages/Config'
 import Templates from './pages/Templates'
+import Backups from './pages/Backups'
 import Logs from './pages/Logs'
 import Notifications from './pages/Notifications'
 import { useEffect, useState } from 'react'
@@ -16,6 +17,7 @@ import withLifecycleLogging from './utils/withLifecycleLogging'
 const LoggedOverview = withLifecycleLogging(Overview, 'Overview');
 const LoggedConfig = withLifecycleLogging(Config, 'Config');
 const LoggedTemplates = withLifecycleLogging(Templates, 'Templates');
+const LoggedBackups = withLifecycleLogging(Backups, 'Backups');
 const LoggedLogs = withLifecycleLogging(Logs, 'Logs');
 const LoggedNotifications = withLifecycleLogging(Notifications, 'Notifications');
 const LoggedLayout = withLifecycleLogging(Layout, 'Layout');
@@ -144,6 +146,7 @@ function App() {
           <Route index element={<LoggedOverview />} />
           <Route path="config" element={<LoggedConfig />} />
           <Route path="templates" element={<LoggedTemplates />} />
+          <Route path="backups" element={<LoggedBackups />} />
           <Route path="logs" element={<LoggedLogs />} />
           <Route path="notifications" element={<LoggedNotifications />} />
         </Route>

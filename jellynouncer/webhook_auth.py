@@ -18,7 +18,7 @@ import base64
 import hashlib
 import secrets
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 from passlib.context import CryptContext
 
@@ -165,7 +165,7 @@ class WebhookAuthenticator:
             
             # Check custom expiry (could be very long or infinite)
             if token_info.get("expires_at"):
-                if datetime.utcnow() > token_info["expires_at"]:
+                if datetime.now(timezone.utc) > token_info["expires_at"]:
                     logger.warning("Service token has expired")
                     return None
             
@@ -291,7 +291,7 @@ class WebhookAPIKeyManager:
             "name": name,
             "key_hash": key_hash,
             "description": description,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
             "last_used": None,
             "active": True
         })
@@ -336,12 +336,13 @@ class ServiceTokenManager:
             "type": "service",
             "service": service_name,
             "username": f"{service_name}-webhook",
-            "iat": datetime.utcnow()
+            "iat": datetime.now(timezone.utc)
         }
         
         # Add expiry if specified
         if expires_in_days > 0:
-            payload["exp"] = (datetime.utcnow() + timedelta(days=expires_in_days)).timestamp()
+            # JWT exp field requires numeric timestamp, not datetime object
+            payload["exp"] = (datetime.now(timezone.utc) + timedelta(days=expires_in_days)).timestamp()  # type: ignore
         
         # Generate token
         token = jwt.encode(payload, jwt_secret, algorithm="HS256")

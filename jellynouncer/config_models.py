@@ -1415,6 +1415,20 @@ class ConfigurationValidator:
             # New notification filter options
             'FILTER_RENAMES': ['notifications', 'filter_renames'],
             'FILTER_DELETES': ['notifications', 'filter_deletes'],
+            
+            # Backup configuration overrides
+            'BACKUP_ENABLED': ['backup', 'enabled'],
+            'BACKUP_DIR': ['backup', 'backup_dir'],
+            'BACKUP_SCHEDULE': ['backup', 'schedule'],
+            'BACKUP_TIME': ['backup', 'backup_time'],
+            'BACKUP_RETENTION_DAYS': ['backup', 'retention_days'],
+            'BACKUP_MAX_COUNT': ['backup', 'max_backups'],
+            'BACKUP_COMPRESS': ['backup', 'compress'],
+            'BACKUP_INCLUDE_CONFIG': ['backup', 'backup_config'],
+            'BACKUP_INCLUDE_DATABASE': ['backup', 'backup_database'],
+            'BACKUP_INCLUDE_TEMPLATES': ['backup', 'backup_templates'],
+            'BACKUP_INCLUDE_SSL': ['backup', 'backup_ssl'],
+            'BACKUP_INCLUDE_LOGS': ['backup', 'backup_logs'],
         }
 
         for env_var, path in env_mappings.items():

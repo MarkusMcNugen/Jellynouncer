@@ -552,6 +552,7 @@ def setup_logging(log_level: str = "INFO", log_dir: str = "/app/logs") -> loggin
     # Rotating file handler to prevent logs from consuming unlimited disk space
     # This is crucial for production deployments that run continuously
     log_file_path = log_path / "jellynouncer.log"
+    file_handler = None  # Initialize to None to avoid reference before assignment
     try:
         file_handler = logging.handlers.RotatingFileHandler(
             filename=log_file_path,
@@ -583,7 +584,7 @@ def setup_logging(log_level: str = "INFO", log_dir: str = "/app/logs") -> loggin
             # Add our colored console handler
             existing_logger.addHandler(console_handler)
             # Add file handler if it was created
-            if 'file_handler' in locals():
+            if file_handler is not None:
                 existing_logger.addHandler(file_handler)
             # Set the level
             existing_logger.setLevel(numeric_level)

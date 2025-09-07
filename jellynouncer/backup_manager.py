@@ -230,8 +230,8 @@ class BackupManager:
             
             # Use SQLite backup API for consistency
             async with aiosqlite.connect(db_path) as source_db:
-                async with aiosqlite.connect(dest_db / "jellynouncer.db") as dest_db:
-                    await source_db.backup(dest_db)
+                async with aiosqlite.connect(dest_db / "jellynouncer.db") as dest_conn:
+                    await source_db.backup(dest_conn)
             
             # Also backup WAL and SHM files if they exist
             for ext in [".wal", ".shm"]:

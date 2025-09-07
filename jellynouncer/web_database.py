@@ -7,7 +7,6 @@ allowing webhook authentication to be checked without circular imports.
 
 import os
 import sqlite3
-import hashlib
 from pathlib import Path
 from typing import Dict, Any, Optional
 import logging
@@ -52,6 +51,50 @@ class WebDatabaseManager:
                 INSERT OR IGNORE INTO security_settings (id, auth_enabled, require_webhook_auth) 
                 VALUES (1, 0, 0)
             """)
+            
+            # Users table for authentication
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    email TEXT,
+                    password_hash TEXT NOT NULL,
+                    salt TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT 1,
+                    is_admin BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP
+                )
+            """)
+            
+            # Sessions table for refresh tokens
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    refresh_token TEXT UNIQUE NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            """)
+            
+            # Audit log table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    action TEXT NOT NULL,
+                    details TEXT,
+                    ip_address TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            """)
+            
+            # Create indexes for user tables
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(refresh_token)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
             
             # Create notification statistics table for historical data
             # Create webhook API keys table
@@ -564,7 +607,6 @@ class WebDatabaseManager:
         """
         import secrets
         import hashlib
-        from datetime import datetime
         
         if not self.initialized:
             await self.initialize()
@@ -597,7 +639,6 @@ class WebDatabaseManager:
         Returns key info if valid, None otherwise
         """
         import hashlib
-        from datetime import datetime
         
         if not self.initialized:
             await self.initialize()
@@ -694,9 +735,19 @@ class WebDatabaseManager:
         
         return False
     
-    async def log_audit(self, user_id: int, action: str, description: str, metadata: Dict = None):
-        """Log audit event (placeholder for future implementation)"""
-        logger.info(f"Audit: User {user_id} performed {action}: {description}")
+    async def log_audit(self, user_id: Optional[int], action: str, details: Optional[str], ip: Optional[str]):
+        """Log an audit event"""
+        if not self.initialized:
+            await self.initialize()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+                (user_id, action, details, ip)
+            )
+            conn.commit()
+        
+        logger.info(f"Audit: User {user_id} from {ip} performed {action}: {details}")
     
     # ==================== Notification History ====================
     
@@ -714,8 +765,6 @@ class WebDatabaseManager:
     ):
         """Add a notification to the history"""
         import json
-
-        from datetime import datetime
         
         if not self.initialized:
             await self.initialize()
@@ -829,3 +878,184 @@ class WebDatabaseManager:
             
             if cursor.rowcount > 0:
                 logger.info(f"Cleaned up {cursor.rowcount} old notification records")
+    
+    # ==================== User Management Methods ====================
+    # These methods are used by web_api.py for authentication
+    
+    @staticmethod
+    def _generate_salt() -> str:
+        """Generate a random salt for password hashing"""
+        import secrets
+        return secrets.token_hex(32)
+    
+    @staticmethod
+    def _hash_password_with_salt(password: str, salt: str) -> str:
+        """Hash password with salt using bcrypt"""
+        import bcrypt
+        # Combine password and salt, then hash with bcrypt
+        salted_password = f"{password}{salt}".encode('utf-8')
+        return bcrypt.hashpw(salted_password, bcrypt.gensalt()).decode('utf-8')
+    
+    @staticmethod
+    def _verify_password_with_salt(password: str, salt: str, password_hash: str) -> bool:
+        """Verify password against hash with salt"""
+        import bcrypt
+        salted_password = f"{password}{salt}".encode('utf-8')
+        return bcrypt.checkpw(salted_password, password_hash.encode('utf-8'))
+    
+    async def create_user(self, username: str, password: str, email: Optional[str] = None, is_admin: bool = False) -> int:
+        """Create a new user with salt and hash"""
+        salt = self._generate_salt()
+        hashed_password = self._hash_password_with_salt(password, salt)
+        
+        import aiosqlite
+        async with aiosqlite.connect(self.db_path) as db:
+            try:
+                cursor = await db.execute(
+                    "INSERT INTO users (username, email, password_hash, salt, is_admin) VALUES (?, ?, ?, ?, ?)",
+                    (username, email, hashed_password, salt, is_admin)
+                )
+                await db.commit()
+                return cursor.lastrowid
+            except aiosqlite.IntegrityError:
+                raise ValueError(f"Username {username} already exists")
+    
+    async def verify_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+        """Verify user credentials with salt"""
+        import aiosqlite
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM users WHERE username = ? AND is_active = 1",
+                (username,)
+            )
+            user = await cursor.fetchone()
+            
+            if user and self._verify_password_with_salt(password, user["salt"], user["password_hash"]):
+                # Update last login
+                await db.execute(
+                    "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?",
+                    (user["id"],)
+                )
+                await db.commit()
+                return dict(user)
+            
+            return None
+    
+    async def update_user_password(self, user_id: int, new_password: str):
+        """Update user password with new salt"""
+        salt = self._generate_salt()
+        hashed_password = self._hash_password_with_salt(new_password, salt)
+        
+        import aiosqlite
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
+                (hashed_password, salt, user_id)
+            )
+            await db.commit()
+    
+    async def save_refresh_token(self, user_id: int, token: str, expires_at):
+        """Save refresh token to database"""
+        import aiosqlite
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO sessions (user_id, refresh_token, expires_at) VALUES (?, ?, ?)",
+                (user_id, token, expires_at.isoformat())
+            )
+            await db.commit()
+    
+    async def verify_refresh_token(self, token: str) -> Optional[int]:
+        """Verify refresh token and return user_id if valid"""
+        import aiosqlite
+        from datetime import datetime, timezone
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT user_id, expires_at FROM sessions WHERE refresh_token = ?",
+                (token,)
+            )
+            row = await cursor.fetchone()
+            
+            if row:
+                user_id, expires_at = row
+                if datetime.fromisoformat(expires_at) > datetime.now(timezone.utc):
+                    return user_id
+                else:
+                    # Clean up expired token
+                    await db.execute("DELETE FROM sessions WHERE refresh_token = ?", (token,))
+                    await db.commit()
+            
+            return None
+    
+    async def update_notification_stats(self, stat_type: str, content_type: Optional[str] = None, count: int = 1):
+        """Update notification statistics for the current hour"""
+        from datetime import datetime, timezone
+        
+        now = datetime.now(timezone.utc)
+        hour_bucket = now.strftime("%Y-%m-%d %H:00:00")
+        day_bucket = now.strftime("%Y-%m-%d")
+        
+        import aiosqlite
+        async with aiosqlite.connect(self.db_path) as db:
+            # First, try to insert a new record for this hour
+            try:
+                await db.execute(
+                    """INSERT INTO notification_stats (hour_bucket, day_bucket) 
+                       VALUES (?, ?)""",
+                    (hour_bucket, day_bucket)
+                )
+            except:
+                # Record already exists for this hour, that's fine
+                pass
+            
+            # Update the appropriate counter
+            if stat_type == "sent":
+                await db.execute(
+                    "UPDATE notification_stats SET notifications_sent = notifications_sent + ? WHERE hour_bucket = ?",
+                    (count, hour_bucket)
+                )
+            elif stat_type == "failed":
+                await db.execute(
+                    "UPDATE notification_stats SET notifications_failed = notifications_failed + ? WHERE hour_bucket = ?",
+                    (count, hour_bucket)
+                )
+            elif stat_type == "new":
+                await db.execute(
+                    "UPDATE notification_stats SET new_items = new_items + ? WHERE hour_bucket = ?",
+                    (count, hour_bucket)
+                )
+            elif stat_type == "upgraded":
+                await db.execute(
+                    "UPDATE notification_stats SET upgraded_items = upgraded_items + ? WHERE hour_bucket = ?",
+                    (count, hour_bucket)
+                )
+            elif stat_type == "deleted":
+                await db.execute(
+                    "UPDATE notification_stats SET deleted_items = deleted_items + ? WHERE hour_bucket = ?",
+                    (count, hour_bucket)
+                )
+            elif stat_type == "mass_rename":
+                await db.execute(
+                    "UPDATE notification_stats SET mass_renames_caught = mass_renames_caught + ? WHERE hour_bucket = ?",
+                    (count, hour_bucket)
+                )
+            
+            # Update content type counters if provided
+            if content_type:
+                if content_type.lower() == "movie":
+                    await db.execute(
+                        "UPDATE notification_stats SET movies = movies + ? WHERE hour_bucket = ?",
+                        (count, hour_bucket)
+                    )
+                elif content_type.lower() in ["series", "episode"]:
+                    await db.execute(
+                        "UPDATE notification_stats SET tv_shows = tv_shows + ? WHERE hour_bucket = ?",
+                        (count, hour_bucket)
+                    )
+                elif content_type.lower() == "music":
+                    await db.execute(
+                        "UPDATE notification_stats SET music = music + ? WHERE hour_bucket = ?",
+                        (count, hour_bucket)
+                    )
+            
+            await db.commit()

@@ -148,5 +148,22 @@
     "ssl_cert_path": null,
     "ssl_key_path": null,
     "ssl_port": 9000
+  },
+  "backup": {
+    "enabled": true,
+    "backup_dir": "data/backups",
+    "schedule": "daily",
+    "backup_time": "02:00",
+    "retention_days": 30,
+    "max_backups": 10,
+    "compress": true,
+    "backup_config": true,
+    "backup_database": true,
+    "backup_templates": true,
+    "backup_ssl": true,
+    "backup_logs": true,
+    "auto_backup_before_upgrade": true,
+    "notification_on_success": false,
+    "notification_on_failure": true
   }
 }

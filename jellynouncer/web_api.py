@@ -42,18 +42,17 @@ from fastapi import FastAPI, HTTPException, Depends, Security, status, Request, 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import uvicorn
 from pydantic import BaseModel, Field, field_validator, ValidationError
 import aiosqlite
 import jwt
 from passlib.context import CryptContext
-import bcrypt
 
 # Import Jellynouncer modules
 from jellynouncer.config_models import ConfigurationValidator
-from jellynouncer.utils import get_web_logger, setup_web_logging, setup_logging, get_logger
+from jellynouncer.utils import get_web_logger, setup_web_logging
+from jellynouncer.backup_manager import BackupManager
 
 # Log early to catch import issues
 early_logger = get_web_logger("jellynouncer.web_api.imports")
@@ -82,6 +81,7 @@ except ImportError as e:
 
 from jellynouncer.ssl_manager import SSLManager, setup_ssl_routes
 from jellynouncer.security_middleware import setup_security_middleware
+from jellynouncer.web_database import WebDatabaseManager
 
 early_logger.debug("All imports completed")
 
@@ -237,477 +237,12 @@ class ClientLogBatch(BaseModel):
     timestamp: str
 
 
-# ==================== Database Manager ====================
-
-class WebDatabaseManager:
-    """Manages the web interface SQLite database"""
-    
-    def __init__(self, db_path: str = WEB_DB_PATH):
-        self.db_path = db_path
-        self.logger = get_web_logger("jellynouncer.web_db")
-        self.logger.debug(f"Initializing WebDatabaseManager with path: {db_path}")
-        
-    async def initialize(self):
-        """Initialize the web database with required tables"""
-        self.logger.debug(f"Starting database initialization at {self.db_path}")
-        
-        # Check if database exists
-        db_exists = os.path.exists(self.db_path)
-        self.logger.debug(f"Database exists: {db_exists}, size: {os.path.getsize(self.db_path) if db_exists else 0} bytes")
-        
-        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.logger.debug(f"Ensured parent directory exists for {self.db_path}")
-        
-        async with aiosqlite.connect(self.db_path) as db:
-            # Enable WAL mode for better concurrency
-            self.logger.debug("Setting database pragmas")
-            await db.execute("PRAGMA journal_mode=WAL")
-            await db.execute("PRAGMA busy_timeout=5000")
-            
-            # Check current settings
-            cursor = await db.execute("PRAGMA journal_mode")
-            journal_mode = await cursor.fetchone()
-            self.logger.debug(f"Journal mode: {journal_mode[0] if journal_mode else 'unknown'}")
-            
-            # Security settings table
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS security_settings (
-                    id INTEGER PRIMARY KEY DEFAULT 1,
-                    auth_enabled BOOLEAN DEFAULT 0,
-                    require_webhook_auth BOOLEAN DEFAULT 0,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    CHECK (id = 1)
-                )
-            """)
-            
-            # Users table
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    email TEXT,
-                    password_hash TEXT NOT NULL,
-                    salt TEXT NOT NULL,
-                    is_active BOOLEAN DEFAULT 1,
-                    is_admin BOOLEAN DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_login TIMESTAMP
-                )
-            """)
-            
-            # Sessions table for refresh tokens
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS sessions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    refresh_token TEXT UNIQUE NOT NULL,
-                    expires_at TIMESTAMP NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users (id)
-                )
-            """)
-            
-            # Historical stats table for dashboard metrics
-            self.logger.debug("Creating notification_stats table...")
-            try:
-                await db.execute("""
-                    CREATE TABLE IF NOT EXISTS notification_stats (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        hour_bucket TEXT NOT NULL,  -- YYYY-MM-DD HH:00:00 for hourly aggregation
-                        day_bucket TEXT NOT NULL,   -- YYYY-MM-DD for daily aggregation
-                        
-                        -- Notification counts
-                        notifications_sent INTEGER DEFAULT 0,
-                        notifications_failed INTEGER DEFAULT 0,
-                        
-                        -- By type
-                        new_items INTEGER DEFAULT 0,
-                        upgraded_items INTEGER DEFAULT 0,
-                        deleted_items INTEGER DEFAULT 0,
-                        
-                        -- By content type
-                        movies INTEGER DEFAULT 0,
-                        tv_shows INTEGER DEFAULT 0,
-                        episodes INTEGER DEFAULT 0,
-                        music INTEGER DEFAULT 0,
-                        
-                        -- Special events
-                        library_scans INTEGER DEFAULT 0,
-                        mass_renames_caught INTEGER DEFAULT 0,  -- Bulk rename operations detected and suppressed
-                        
-                        -- Performance metrics
-                        avg_processing_time_ms REAL,
-                        queue_size_max INTEGER DEFAULT 0,
-                        
-                        -- Unique constraint on hour bucket to prevent duplicates
-                        UNIQUE(hour_bucket)
-                    )
-                """)
-                self.logger.info("notification_stats table created successfully")
-            except Exception as e:
-                self.logger.error(f"Failed to create notification_stats table: {e}", exc_info=True)
-                raise
-            
-            # Create indexes for efficient querying
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notification_stats_day 
-                ON notification_stats(day_bucket)
-            """)
-            
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notification_stats_timestamp 
-                ON notification_stats(timestamp)
-            """)
-            
-            # Audit log table
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS audit_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    action TEXT NOT NULL,
-                    details TEXT,
-                    ip_address TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users (id)
-                )
-            """)
-            
-            # Create indexes
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(refresh_token)")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
-            
-            await db.commit()
-            
-            # Verify all tables were created
-            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in await cursor.fetchall()]
-            self.logger.info(f"Database tables present: {tables}")
-            
-            if 'notification_stats' not in tables:
-                self.logger.error("notification_stats table was not created!")
-            
-            # Initialize security settings if not exists
-            cursor = await db.execute("SELECT COUNT(*) FROM security_settings")
-            count = (await cursor.fetchone())[0]
-            self.logger.debug(f"Found {count} security settings records")
-            
-            if count == 0:
-                await db.execute("INSERT INTO security_settings (auth_enabled, require_webhook_auth) VALUES (0, 0)")
-                await db.commit()
-                self.logger.info("Initialized security settings with authentication disabled")
-            else:
-                self.logger.debug("Security settings already initialized")
-    
-    async def get_security_settings(self) -> Dict[str, bool]:
-        """Get current security settings"""
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute("SELECT * FROM security_settings WHERE id = 1")
-            settings = await cursor.fetchone()
-            
-            if settings:
-                return {
-                    "auth_enabled": bool(settings["auth_enabled"]),
-                    "require_webhook_auth": bool(settings["require_webhook_auth"])
-                }
-            return {"auth_enabled": False, "require_webhook_auth": False}
-    
-    async def update_security_settings(self, auth_enabled: bool, require_webhook_auth: bool):
-        """Update security settings"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """UPDATE security_settings 
-                   SET auth_enabled = ?, require_webhook_auth = ?, updated_at = CURRENT_TIMESTAMP 
-                   WHERE id = 1""",
-                (auth_enabled, require_webhook_auth)
-            )
-            await db.commit()
-    
-    @staticmethod
-    def _generate_salt() -> str:
-        """Generate a random salt for password hashing"""
-        return secrets.token_hex(32)
-    
-    @staticmethod
-    def _hash_password_with_salt(password: str, salt: str) -> str:
-        """Hash password with salt using bcrypt"""
-        # Combine password and salt, then hash with bcrypt
-        salted_password = f"{password}{salt}".encode('utf-8')
-        return bcrypt.hashpw(salted_password, bcrypt.gensalt()).decode('utf-8')
-    
-    @staticmethod
-    def _verify_password_with_salt(password: str, salt: str, password_hash: str) -> bool:
-        """Verify password against hash with salt"""
-        salted_password = f"{password}{salt}".encode('utf-8')
-        return bcrypt.checkpw(salted_password, password_hash.encode('utf-8'))
-    
-    async def create_user(self, username: str, password: str, email: Optional[str] = None, is_admin: bool = False) -> int:
-        """Create a new user with salt and hash"""
-        salt = self._generate_salt()
-        hashed_password = self._hash_password_with_salt(password, salt)
-        
-        async with aiosqlite.connect(self.db_path) as db:
-            try:
-                cursor = await db.execute(
-                    "INSERT INTO users (username, email, password_hash, salt, is_admin) VALUES (?, ?, ?, ?, ?)",
-                    (username, email, hashed_password, salt, is_admin)
-                )
-                await db.commit()
-                return cursor.lastrowid
-            except aiosqlite.IntegrityError:
-                raise ValueError(f"Username {username} already exists")
-    
-    async def verify_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
-        """Verify user credentials with salt"""
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute(
-                "SELECT * FROM users WHERE username = ? AND is_active = 1",
-                (username,)
-            )
-            user = await cursor.fetchone()
-            
-            if user and self._verify_password_with_salt(password, user["salt"], user["password_hash"]):
-                # Update last login
-                await db.execute(
-                    "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?",
-                    (user["id"],)
-                )
-                await db.commit()
-                return dict(user)
-            
-            return None
-    
-    async def update_user_password(self, user_id: int, new_password: str):
-        """Update user password with new salt"""
-        salt = self._generate_salt()
-        hashed_password = self._hash_password_with_salt(new_password, salt)
-        
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
-                (hashed_password, salt, user_id)
-            )
-            await db.commit()
-    
-    async def save_refresh_token(self, user_id: int, token: str, expires_at: datetime):
-        """Save refresh token to database"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                "INSERT INTO sessions (user_id, refresh_token, expires_at) VALUES (?, ?, ?)",
-                (user_id, token, expires_at.isoformat())
-            )
-            await db.commit()
-    
-    async def verify_refresh_token(self, token: str) -> Optional[int]:
-        """Verify refresh token and return user_id if valid"""
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "SELECT user_id, expires_at FROM sessions WHERE refresh_token = ?",
-                (token,)
-            )
-            row = await cursor.fetchone()
-            
-            if row:
-                user_id, expires_at = row
-                if datetime.fromisoformat(expires_at) > datetime.now(timezone.utc):
-                    return user_id
-                else:
-                    # Clean up expired token
-                    await db.execute("DELETE FROM sessions WHERE refresh_token = ?", (token,))
-                    await db.commit()
-            
-            return None
-    
-    async def log_audit(self, user_id: Optional[int], action: str, details: Optional[str], ip: Optional[str]):
-        """Log an audit event"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                "INSERT INTO audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
-                (user_id, action, details, ip)
-            )
-            await db.commit()
-    
-    async def update_notification_stats(self, stat_type: str, content_type: Optional[str] = None, count: int = 1):
-        """Update notification statistics for the current hour"""
-        from datetime import datetime, timezone
-        
-        now = datetime.now(timezone.utc)
-        hour_bucket = now.strftime("%Y-%m-%d %H:00:00")
-        day_bucket = now.strftime("%Y-%m-%d")
-        
-        async with aiosqlite.connect(self.db_path) as db:
-            # First, try to insert a new record for this hour
-            try:
-                await db.execute(
-                    """INSERT INTO notification_stats (hour_bucket, day_bucket) 
-                       VALUES (?, ?)""",
-                    (hour_bucket, day_bucket)
-                )
-            except:
-                # Record already exists for this hour, that's fine
-                pass
-            
-            # Update the appropriate counter
-            if stat_type == "sent":
-                await db.execute(
-                    "UPDATE notification_stats SET notifications_sent = notifications_sent + ? WHERE hour_bucket = ?",
-                    (count, hour_bucket)
-                )
-            elif stat_type == "failed":
-                await db.execute(
-                    "UPDATE notification_stats SET notifications_failed = notifications_failed + ? WHERE hour_bucket = ?",
-                    (count, hour_bucket)
-                )
-            elif stat_type == "new":
-                await db.execute(
-                    "UPDATE notification_stats SET new_items = new_items + ? WHERE hour_bucket = ?",
-                    (count, hour_bucket)
-                )
-            elif stat_type == "upgraded":
-                await db.execute(
-                    "UPDATE notification_stats SET upgraded_items = upgraded_items + ? WHERE hour_bucket = ?",
-                    (count, hour_bucket)
-                )
-            elif stat_type == "deleted":
-                await db.execute(
-                    "UPDATE notification_stats SET deleted_items = deleted_items + ? WHERE hour_bucket = ?",
-                    (count, hour_bucket)
-                )
-            elif stat_type == "mass_rename":
-                await db.execute(
-                    "UPDATE notification_stats SET mass_renames_caught = mass_renames_caught + ? WHERE hour_bucket = ?",
-                    (count, hour_bucket)
-                )
-            
-            # Update content type counters if provided
-            if content_type:
-                if content_type.lower() == "movie":
-                    await db.execute(
-                        "UPDATE notification_stats SET movies = movies + ? WHERE hour_bucket = ?",
-                        (count, hour_bucket)
-                    )
-                elif content_type.lower() in ["series", "episode"]:
-                    await db.execute(
-                        "UPDATE notification_stats SET tv_shows = tv_shows + ? WHERE hour_bucket = ?",
-                        (count, hour_bucket)
-                    )
-                elif content_type.lower() == "music":
-                    await db.execute(
-                        "UPDATE notification_stats SET music = music + ? WHERE hour_bucket = ?",
-                        (count, hour_bucket)
-                    )
-            
-            await db.commit()
-    
-    async def get_notification_stats(self, hours: int = 24) -> Dict[str, Any]:
-        """Get notification statistics for the dashboard"""
-        from datetime import datetime, timezone, timedelta
-        
-        try:
-            now = datetime.now(timezone.utc)
-            start_time = now - timedelta(hours=hours)
-            
-            self.logger.debug(f"Fetching notification stats for last {hours} hours (since {start_time.isoformat()})")
-            
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                
-                # Get hourly stats for chart
-                cursor = await db.execute("""
-                    SELECT 
-                        hour_bucket,
-                        notifications_sent,
-                        notifications_failed,
-                        new_items,
-                        upgraded_items,
-                        deleted_items
-                    FROM notification_stats
-                    WHERE timestamp >= ?
-                    ORDER BY hour_bucket
-                """, (start_time.isoformat(),))
-                
-                hourly_stats = await cursor.fetchall()
-                self.logger.debug(f"Found {len(hourly_stats)} hourly stat records")
-                
-                # Get totals for the period
-                cursor = await db.execute("""
-                    SELECT 
-                        COALESCE(SUM(notifications_sent), 0) as total_sent,
-                        COALESCE(SUM(notifications_failed), 0) as total_failed,
-                        COALESCE(SUM(new_items), 0) as total_new,
-                        COALESCE(SUM(upgraded_items), 0) as total_upgraded,
-                        COALESCE(SUM(deleted_items), 0) as total_deleted,
-                        COALESCE(SUM(movies), 0) as total_movies,
-                        COALESCE(SUM(tv_shows), 0) as total_tv,
-                        COALESCE(SUM(music), 0) as total_music,
-                        COALESCE(SUM(mass_renames_caught), 0) as total_renames_caught
-                    FROM notification_stats
-                    WHERE timestamp >= ?
-                """, (start_time.isoformat(),))
-                
-                totals = await cursor.fetchone()
-                
-                # Convert to dict with defaults for empty table
-                totals_dict = {}
-                if totals:
-                    for key in totals.keys():
-                        value = totals[key]
-                        totals_dict[key] = value if value is not None else 0
-                else:
-                    # Provide default values if no data
-                    totals_dict = {
-                        "total_sent": 0,
-                        "total_failed": 0,
-                        "total_new": 0,
-                        "total_upgraded": 0,
-                        "total_deleted": 0,
-                        "total_movies": 0,
-                        "total_tv": 0,
-                        "total_music": 0,
-                        "total_renames_caught": 0
-                    }
-                
-                # Convert hourly stats safely
-                hourly_list = []
-                for row in hourly_stats:
-                    row_dict = {}
-                    for key in row.keys():
-                        value = row[key]
-                        row_dict[key] = value if value is not None else 0
-                    hourly_list.append(row_dict)
-                
-                result = {
-                    "hourly": hourly_list,
-                    "totals": totals_dict,
-                    "period_hours": hours
-                }
-                
-                self.logger.debug(f"Returning notification stats: {len(hourly_list)} hourly records, totals: {totals_dict}")
-                return result
-                
-        except Exception as e:
-            self.logger.error(f"Error fetching notification stats: {e}", exc_info=True)
-            # Return safe defaults on error
-            return {
-                "hourly": [],
-                "totals": {
-                    "total_sent": 0,
-                    "total_failed": 0,
-                    "total_new": 0,
-                    "total_upgraded": 0,
-                    "total_deleted": 0,
-                    "total_movies": 0,
-                    "total_tv": 0,
-                    "total_music": 0,
-                    "total_renames_caught": 0
-                },
-                "period_hours": hours
-            }
-
-
 # ==================== Authentication ====================
+# The database manager is now imported from web_database.py
+# This provides a shared module for both web_api and webhook_api
+
+# NOTE: The LocalWebDatabaseManager class has been removed.
+# All functionality is now in the shared WebDatabaseManager from web_database.py
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token"""
@@ -950,6 +485,7 @@ class WebInterfaceService:
         self.db = None  # Own database connection for web interface
         self.web_db = WebDatabaseManager()
         self.ssl_manager = SSLManager(WEB_DB_PATH)
+        self.backup_manager = None  # Will be initialized after config is loaded
         self.logger = get_web_logger("jellynouncer.web_interface")
         self.logger.debug("Initializing WebInterfaceService")
         
@@ -985,6 +521,13 @@ class WebInterfaceService:
             self.ssl_manager = SSLManager(ssl_config=ssl_config_obj, db_path=WEB_DB_PATH)
             await self.ssl_manager.initialize()
             self.logger.debug("SSL manager initialized successfully")
+            
+            # Initialize backup manager with config
+            self.logger.debug("Initializing backup manager...")
+            backup_config = self.config.backup.model_dump() if hasattr(self.config, 'backup') else {}
+            self.backup_manager = BackupManager(backup_config)
+            await self.backup_manager.initialize()
+            self.logger.debug("Backup manager initialized successfully")
             
             # Initialize Jellyfin API client
             self.logger.debug("Initializing Jellyfin API client...")
@@ -2147,8 +1690,9 @@ async def change_password(
     try:
         # Verify current password
         async with aiosqlite.connect(WEB_DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
             cursor = await db.execute(
-                "SELECT password_hash FROM users WHERE id = ?",
+                "SELECT username FROM users WHERE id = ?",
                 (current_user["user_id"],)
             )
             row = await cursor.fetchone()
@@ -2159,19 +1703,16 @@ async def change_password(
                     detail="User not found"
                 )
             
-            if not verify_password(current_password, row[0]):
+            # Use web_db's verify_user method to check password
+            user = await web_service.web_db.verify_user(row["username"], current_password)
+            if not user:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Current password is incorrect"
                 )
             
-            # Update password
-            new_hash = hash_password(new_password)
-            await db.execute(
-                "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (new_hash, current_user["user_id"])
-            )
-            await db.commit()
+            # Update password using web_db method
+            await web_service.web_db.update_user_password(current_user["user_id"], new_password)
         
         # Log the password change
         await web_service.web_db.log_audit(
@@ -2270,7 +1811,7 @@ async def create_webhook_api_key(
                 current_user.get("user_id"),
                 "webhook_api_key_created",
                 f"Created webhook API key: {name}",
-                {"key_id": key_info["id"], "name": name}
+                None  # IP address parameter, not metadata dict
             )
         
         return {
@@ -2304,7 +1845,7 @@ async def revoke_webhook_api_key(
                     current_user.get("user_id"),
                     "webhook_api_key_revoked",
                     f"Revoked webhook API key ID: {key_id}",
-                    {"key_id": key_id}
+                    None  # IP address parameter
                 )
             
             return {"success": True, "message": "API key revoked successfully"}
@@ -2531,15 +2072,19 @@ async def test_jellyfin_connection(
 ):
     """Test Jellyfin server connection"""
     try:
-        # Import Jellyfin API client
+        # Import Jellyfin API client and config model
         from jellynouncer.jellyfin_api import JellyfinAPI
+        from jellynouncer.config_models import JellyfinConfig
         
-        # Create temporary client with provided config
-        jellyfin = JellyfinAPI(
+        # Create temporary config object
+        jellyfin_config = JellyfinConfig(
             server_url=config.get("server_url"),
             api_key=config.get("api_key"),
             user_id=config.get("user_id")
         )
+        
+        # Create temporary client with config object
+        jellyfin = JellyfinAPI(jellyfin_config)
         
         # Test connection by getting server info
         server_info = await jellyfin.get_system_info()
@@ -3302,6 +2847,226 @@ async def get_ssl_config():
     
     return {"port": 1985}
 
+
+# ==================== BACKUP ENDPOINTS ====================
+
+@app.get("/api/backup/status")
+async def get_backup_status(current_user: Optional[Dict] = Depends(check_auth_required)):
+    """Get backup system status and configuration"""
+    try:
+        if not web_service.backup_manager:
+            return {"enabled": False, "message": "Backup system not initialized"}
+        
+        # Get current configuration
+        config = web_service.config.backup.model_dump() if hasattr(web_service.config, 'backup') else {}
+        
+        # Get backup statistics
+        stats = await web_service.backup_manager.get_statistics()
+        
+        # Calculate estimated backup size
+        db_size = 0
+        config_size = 0
+        template_size = 0
+        
+        # Database size
+        db_path = Path("data/jellynouncer.db")
+        if db_path.exists():
+            db_size = db_path.stat().st_size
+            for ext in [".wal", ".shm"]:
+                wal_file = Path(str(db_path) + ext)
+                if wal_file.exists():
+                    db_size += wal_file.stat().st_size
+        
+        # Config size
+        config_path = Path("/app/config/config.json")
+        if not config_path.exists():
+            config_path = Path("config/config.json")
+        if config_path.exists():
+            config_size = config_path.stat().st_size
+        
+        # Templates size
+        template_dir = Path("/app/templates")
+        if not template_dir.exists():
+            template_dir = Path("templates")
+        if template_dir.exists():
+            template_size = sum(f.stat().st_size for f in template_dir.glob("*.j2"))
+        
+        estimated_size = db_size + config_size + template_size
+        
+        return {
+            "enabled": config.get("enabled", True),
+            "config": config,
+            "statistics": stats,
+            "estimated_size": estimated_size,
+            "estimated_size_mb": round(estimated_size / (1024 * 1024), 2),
+            "next_backup": await web_service.backup_manager.get_next_backup_time() if web_service.backup_manager else None
+        }
+    except Exception as e:
+        logger.error(f"Failed to get backup status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/backup/list")
+async def list_backups(current_user: Optional[Dict] = Depends(check_auth_required)):
+    """List all available backups"""
+    try:
+        if not web_service.backup_manager:
+            raise HTTPException(status_code=503, detail="Backup system not initialized")
+        
+        backups = await web_service.backup_manager.list_backups()
+        return {"backups": backups}
+    except Exception as e:
+        logger.error(f"Failed to list backups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/backup/create")
+async def create_backup(
+    description: str = Form(default="Manual backup"),
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Manually create a backup"""
+    try:
+        if not web_service.backup_manager:
+            raise HTTPException(status_code=503, detail="Backup system not initialized")
+        
+        # Create backup
+        backup_info = await web_service.backup_manager.create_backup(
+            backup_type="manual",
+            description=description
+        )
+        
+        return {
+            "success": True,
+            "backup": backup_info,
+            "message": f"Backup created successfully: {backup_info['filename']}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to create backup: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/backup/restore/{backup_name}")
+async def restore_backup(
+    backup_name: str,
+    components: List[str] = Query(default=["config", "database", "templates"]),
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Restore from a specific backup"""
+    try:
+        if not web_service.backup_manager:
+            raise HTTPException(status_code=503, detail="Backup system not initialized")
+        
+        # Create a pre-restore backup first
+        logger.info(f"Creating pre-restore backup before restoring {backup_name}")
+        pre_restore = await web_service.backup_manager.create_backup(
+            backup_type="pre-restore",
+            description=f"Automatic backup before restore from {backup_name}"
+        )
+        
+        # Perform restore
+        result = await web_service.backup_manager.restore_backup(
+            backup_name,
+            components=components
+        )
+        
+        return {
+            "success": True,
+            "pre_restore_backup": pre_restore['filename'],
+            "restored_components": result,
+            "message": f"Successfully restored from {backup_name}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to restore backup: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/backup/{backup_name}")
+async def delete_backup(
+    backup_name: str,
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Delete a specific backup"""
+    try:
+        if not web_service.backup_manager:
+            raise HTTPException(status_code=503, detail="Backup system not initialized")
+        
+        # Delete the backup
+        success = await web_service.backup_manager.delete_backup(backup_name)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"Backup {backup_name} deleted successfully"
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Backup {backup_name} not found")
+    except Exception as e:
+        logger.error(f"Failed to delete backup: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/backup/config")
+async def update_backup_config(
+    config: dict,
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Update backup configuration"""
+    try:
+        # Update config in memory
+        if hasattr(web_service.config, 'backup'):
+            for key, value in config.items():
+                if hasattr(web_service.config.backup, key):
+                    setattr(web_service.config.backup, key, value)
+        
+        # Save to config file
+        config_path = "/app/config/config.json"
+        if not os.path.exists(config_path):
+            config_path = "config/config.json"
+        
+        with open(config_path, 'r') as f:
+            full_config = json.load(f)
+        
+        if 'backup' not in full_config:
+            full_config['backup'] = {}
+        
+        full_config['backup'].update(config)
+        
+        with open(config_path, 'w') as f:
+            json.dump(full_config, f, indent=2)
+        
+        # Reinitialize backup manager with new config
+        if web_service.backup_manager:
+            await web_service.backup_manager.update_config(config)
+        
+        return {
+            "success": True,
+            "message": "Backup configuration updated successfully",
+            "config": config
+        }
+    except Exception as e:
+        logger.error(f"Failed to update backup config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/backup/test")
+async def test_backup(current_user: Optional[Dict] = Depends(check_auth_required)):
+    """Test backup system by creating a small test backup"""
+    try:
+        if not web_service.backup_manager:
+            raise HTTPException(status_code=503, detail="Backup system not initialized")
+        
+        # Create a test backup with minimal components
+        backup_info = await web_service.backup_manager.create_backup(
+            backup_type="test",
+            description="Test backup for system verification",
+            components=["config"]  # Only backup config for test
+        )
+        
+        # Immediately delete the test backup
+        await web_service.backup_manager.delete_backup(backup_info['filename'])
+        
+        return {
+            "success": True,
+            "message": "Backup system test completed successfully"
+        }
+    except Exception as e:
+        logger.error(f"Backup system test failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Backup system test failed: {str(e)}")
 
 if __name__ == "__main__":
     import asyncio

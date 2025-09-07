@@ -34,6 +34,7 @@ const Layout = () => {
     { name: 'Overview', href: '/', icon: 'house', style: 'duotone' },
     { name: 'Configuration', href: '/config', icon: 'gears', style: 'duotone' },
     { name: 'Templates', href: '/templates', icon: 'file-code', style: 'duotone' },
+    { name: 'Backups', href: '/backups', icon: 'database', style: 'duotone' },
     { name: 'Logs', href: '/logs', icon: 'magnifying-glass-plus', style: 'duotone' },
   ];
 

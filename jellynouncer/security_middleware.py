@@ -17,12 +17,11 @@ License: MIT
 import time
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 from collections import defaultdict, deque
 from pathlib import Path
-import json
 import aiosqlite
-from fastapi import Request, Response, HTTPException, status
+from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
@@ -41,9 +40,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.enable_hsts = enable_hsts
         self.enable_csp = enable_csp
-        self.csp_policy = csp_policy or self._default_csp_policy()
+        self.csp_policy = csp_policy or SecurityHeadersMiddleware._default_csp_policy()
     
-    def _default_csp_policy(self) -> str:
+    @staticmethod
+    def _default_csp_policy() -> str:
         """Generate default Content Security Policy"""
         return (
             "default-src 'self'; "
@@ -124,7 +124,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 if not self.requests[ip]:
                     del self.requests[ip]
     
-    def _get_client_ip(self, request: Request) -> str:
+    @staticmethod
+    def _get_client_ip(request: Request) -> str:
         """Extract client IP, considering proxy headers"""
         # Check for proxy headers
         forwarded_for = request.headers.get("X-Forwarded-For")
@@ -158,7 +159,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if self._is_exempt(request.url.path):
             return await call_next(request)
         
-        client_ip = self._get_client_ip(request)
+        client_ip = RateLimitMiddleware._get_client_ip(request)
         current_time = time.time()
         
         # Get limit for this endpoint
@@ -303,7 +304,8 @@ class Fail2BanMiddleware(BaseHTTPMiddleware):
                 if not self.failed_attempts[ip]:
                     del self.failed_attempts[ip]
     
-    def _get_client_ip(self, request: Request) -> str:
+    @staticmethod
+    def _get_client_ip(request: Request) -> str:
         """Extract client IP, considering proxy headers"""
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
@@ -320,7 +322,7 @@ class Fail2BanMiddleware(BaseHTTPMiddleware):
     
     async def record_failed_attempt(self, request: Request, username: Optional[str] = None):
         """Record a failed authentication attempt"""
-        ip = self._get_client_ip(request)
+        ip = Fail2BanMiddleware._get_client_ip(request)
         current_time = datetime.now(timezone.utc)
         
         # Add to in-memory tracking
@@ -369,7 +371,7 @@ class Fail2BanMiddleware(BaseHTTPMiddleware):
         logger.warning(f"IP {ip} banned until {ban_end} after {attempt_count} failed attempts")
     
     async def dispatch(self, request: Request, call_next):
-        ip = self._get_client_ip(request)
+        ip = Fail2BanMiddleware._get_client_ip(request)
         
         # Check if IP is banned
         if ip in self.banned_ips:

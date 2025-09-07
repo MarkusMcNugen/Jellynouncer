@@ -630,20 +630,20 @@ class SyncProgressDisplay:
         icon = self.chars['icons']
         
         # Box width configuration (total width including borders)
-        BOX_WIDTH = 68  # Total width of the box including borders
-        INNER_WIDTH = BOX_WIDTH - 4  # Subtract 2 for "│ " and 2 for " │"
+        box_width = 68  # Total width of the box including borders
+        inner_width = box_width - 4  # Subtract 2 for "│ " and 2 for " │"
         
         # Always log the start message to file for record keeping
         if self.unicode_level == 'full':
             # Beautiful Unicode box with rounded corners and emojis
             # Note: Emojis can be 2 characters wide in terminals
-            border_line = "─" * (BOX_WIDTH - 2)  # -2 for corner characters
+            border_line = "─" * (box_width - 2)  # -2 for corner characters
             self._output(f"╭{border_line}╮", force_log=True)
             
             title = f"{icon['start']} Library Sync Started ({self.sync_type.title()} Sync)"
             # Use the display width calculator to get accurate width
             title_display_width = self._calculate_display_width(title)
-            padding_needed = INNER_WIDTH - title_display_width
+            padding_needed = inner_width - title_display_width
             padding_needed = max(0, padding_needed)  # Ensure non-negative
             self._output(f"│ {title}{' ' * padding_needed} │", force_log=True)
             
@@ -659,19 +659,19 @@ class SyncProgressDisplay:
             for emoji, text in stats_lines:
                 line_content = f"{emoji}  {text}"  # Two spaces after emoji for visual balance
                 content_display_width = self._calculate_display_width(line_content)
-                padding = INNER_WIDTH - content_display_width
+                padding = inner_width - content_display_width
                 padding = max(0, padding)  # Ensure non-negative
                 self._output(f"│ {line_content}{' ' * padding} │", force_log=True)
             
             self._output(f"╰{border_line}╯", force_log=True)
         elif self.unicode_level == 'unicode':
             # Unicode without emojis  
-            border_line = "─" * (BOX_WIDTH - 2)
+            border_line = "─" * (box_width - 2)
             self._output(f"╭{border_line}╮", force_log=True)
             
             title = f"{icon['start']} Library Sync Started ({self.sync_type.title()} Sync)"
             title_display_width = self._calculate_display_width(title)
-            padding_needed = INNER_WIDTH - title_display_width
+            padding_needed = inner_width - title_display_width
             padding_needed = max(0, padding_needed)
             self._output(f"│ {title}{' ' * padding_needed} │", force_log=True)
             
@@ -686,7 +686,7 @@ class SyncProgressDisplay:
             
             for line in stats_lines:
                 line_display_width = self._calculate_display_width(line)
-                padding = INNER_WIDTH - line_display_width
+                padding = inner_width - line_display_width
                 padding = max(0, padding)
                 self._output(f"│ {line}{' ' * padding} │", force_log=True)
             
@@ -694,13 +694,13 @@ class SyncProgressDisplay:
         else:
             # ASCII fallback
             # ASCII boxes are simpler - no multi-byte characters
-            border_line = "-" * (BOX_WIDTH - 2)
+            border_line = "-" * (box_width - 2)
             self._output(f"+{border_line}+", force_log=True)
             
             title = f"{icon['start']} Library Sync Started ({self.sync_type.title()} Sync)"
             # For ASCII, icons are multi-char like "[>]" so we still need display width
             title_display_width = self._calculate_display_width(title)
-            padding_needed = INNER_WIDTH - title_display_width
+            padding_needed = inner_width - title_display_width
             padding_needed = max(0, padding_needed)
             self._output(f"| {title}{' ' * padding_needed} |", force_log=True)
             
@@ -714,7 +714,7 @@ class SyncProgressDisplay:
             
             for line in stats_lines:
                 line_display_width = self._calculate_display_width(line)
-                padding = INNER_WIDTH - line_display_width
+                padding = inner_width - line_display_width
                 padding = max(0, padding)
                 self._output(f"| {line}{' ' * padding} |", force_log=True)
             
@@ -812,19 +812,19 @@ class SyncProgressDisplay:
             status_color = self._rgb_color(255, 0, 0)
         
         # Box width configuration
-        BOX_WIDTH = 68  # Total width of the box including borders
-        INNER_WIDTH = BOX_WIDTH - 4  # Subtract 2 for "│ " and 2 for " │"
+        box_width = 68  # Total width of the box including borders
+        inner_width = box_width - 4  # Subtract 2 for "│ " and 2 for " │"
         
         # Always log completion to file for record keeping
         if self.unicode_level == 'full':
-            border_line = "─" * (BOX_WIDTH - 2)
+            border_line = "─" * (box_width - 2)
             self._output(f"╭{border_line}╮", force_log=True)
             
             # Format status line with proper padding accounting for color codes
             status_line = f"{status_icon}  {status_text}: {self.items_processed:,} items in {SyncProgressDisplay._format_time(elapsed)}"
             # Use display width calculator for accurate width (excludes ANSI codes)
             status_display_width = self._calculate_display_width(status_line)
-            padding_needed = INNER_WIDTH - status_display_width
+            padding_needed = inner_width - status_display_width
             padding_needed = max(0, padding_needed)
             # Note: color codes go around the content, not affecting padding
             self._output(f"│ {status_color}{status_line}{self.reset}{' ' * padding_needed} │", force_log=True)
@@ -841,18 +841,18 @@ class SyncProgressDisplay:
             for emoji, text in stats_lines:
                 line_content = f"{emoji}  {text}"  # Two spaces after emoji
                 content_display_width = self._calculate_display_width(line_content)
-                padding = INNER_WIDTH - content_display_width
+                padding = inner_width - content_display_width
                 padding = max(0, padding)
                 self._output(f"│ {line_content}{' ' * padding} │", force_log=True)
             
             self._output(f"╰{border_line}╯", force_log=True)
         elif self.unicode_level == 'unicode':
-            border_line = "─" * (BOX_WIDTH - 2)
+            border_line = "─" * (box_width - 2)
             self._output(f"╭{border_line}╮", force_log=True)
             
             status_line = f"{status_icon} {status_text}: {self.items_processed:,} items in {SyncProgressDisplay._format_time(elapsed)}"
             status_display_width = self._calculate_display_width(status_line)
-            padding_needed = INNER_WIDTH - status_display_width
+            padding_needed = inner_width - status_display_width
             padding_needed = max(0, padding_needed)
             self._output(f"│ {status_color}{status_line}{self.reset}{' ' * padding_needed} │", force_log=True)
             
@@ -866,18 +866,18 @@ class SyncProgressDisplay:
             
             for line in stats_lines:
                 line_display_width = self._calculate_display_width(line)
-                padding = INNER_WIDTH - line_display_width
+                padding = inner_width - line_display_width
                 padding = max(0, padding)
                 self._output(f"│ {line}{' ' * padding} │", force_log=True)
             
             self._output(f"╰{border_line}╯", force_log=True)
         else:
-            border_line = "-" * (BOX_WIDTH - 2)
+            border_line = "-" * (box_width - 2)
             self._output(f"+{border_line}+", force_log=True)
             
             status_line = f"{status_icon} {status_text}: {self.items_processed:,} items in {SyncProgressDisplay._format_time(elapsed)}"
             status_display_width = self._calculate_display_width(status_line)
-            padding_needed = INNER_WIDTH - status_display_width
+            padding_needed = inner_width - status_display_width
             padding_needed = max(0, padding_needed)
             self._output(f"| {status_line}{' ' * padding_needed} |", force_log=True)
             
@@ -891,7 +891,7 @@ class SyncProgressDisplay:
             
             for line in stats_lines:
                 line_display_width = self._calculate_display_width(line)
-                padding = INNER_WIDTH - line_display_width
+                padding = inner_width - line_display_width
                 padding = max(0, padding)
                 self._output(f"| {line}{' ' * padding} |", force_log=True)
             

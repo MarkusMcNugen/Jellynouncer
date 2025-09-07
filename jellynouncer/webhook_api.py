@@ -306,42 +306,35 @@ async def receive_webhook(request: Request):
         )
 
     # Check if webhook authentication is required
-    WebDatabaseManager = None  # Default to None if import fails
     try:
-        # Import WebDatabaseManager from web_api
+        # Import WebDatabaseManager from web_database
         from jellynouncer.web_database import WebDatabaseManager
-    except ImportError:
-        # Web database not available, skip auth check
-        if webhook_service and webhook_service.logger:
-            webhook_service.logger.debug("Web database not available, skipping webhook auth check")
-        WebDatabaseManager = None
-    
-    # Only check auth if WebDatabaseManager is available
-    if WebDatabaseManager:
-        try:
-            web_db = WebDatabaseManager()
-            await web_db.initialize()
-            settings = await web_db.get_security_settings()
+        
+        # Initialize web database and get settings
+        web_db = WebDatabaseManager()
+        await web_db.initialize()
+        settings = await web_db.get_security_settings()
+        
+        # Check if authentication is required based on settings
+        if settings.get("require_webhook_auth", False):
+            # Check for authorization header
+            auth_header = request.headers.get("authorization", "")
+            client_ip = request.client.host if request.client else None
+            authenticated = False
+            auth_method = None
             
-            if settings.get("require_webhook_auth", False):
-                # Check for authorization header
-                auth_header = request.headers.get("authorization", "")
-                client_ip = request.client.host if request.client else None
-                authenticated = False
-                auth_method = None
-                
-                # Try API Key authentication first (most common for webhooks)
-                if auth_header.startswith("ApiKey "):
-                    api_key = auth_header[7:].strip()
-                    key_info = await web_db.validate_webhook_api_key(api_key, client_ip)
-                    if key_info:
-                        authenticated = True
-                        auth_method = f"API Key: {key_info['name']}"
-                        if webhook_service and webhook_service.logger:
-                            webhook_service.logger.info(f"Webhook authenticated via API key '{key_info['name']}' (usage #{key_info['usage_count']})")
-                
-                # Try Bearer token (JWT) authentication
-                elif auth_header.startswith("Bearer "):
+            # Try API Key authentication first (most common for webhooks)
+            if auth_header.startswith("ApiKey "):
+                api_key = auth_header[7:].strip()
+                key_info = await web_db.validate_webhook_api_key(api_key, client_ip)
+                if key_info:
+                    authenticated = True
+                    auth_method = f"API Key: {key_info['name']}"
+                    if webhook_service and webhook_service.logger:
+                        webhook_service.logger.info(f"Webhook authenticated via API key '{key_info['name']}' (usage #{key_info['usage_count']})")
+            
+            # Try Bearer token (JWT) authentication
+            elif auth_header.startswith("Bearer "):
                     token = auth_header[7:].strip()
                     try:
                         import jwt
@@ -374,9 +367,9 @@ async def receive_webhook(request: Request):
                         except jwt.InvalidTokenError as jwt_error:
                             if webhook_service and webhook_service.logger:
                                 webhook_service.logger.warning(f"Invalid webhook JWT token: {str(jwt_error)}")
-                
-                # Check if authentication was successful
-                if not authenticated:
+            
+            # Check if authentication was successful
+            if not authenticated:
                     if webhook_service and webhook_service.logger:
                         webhook_service.logger.warning(f"Webhook authentication required but no valid credentials provided from IP: {client_ip}")
                     raise HTTPException(
@@ -385,24 +378,26 @@ async def receive_webhook(request: Request):
                         headers={"WWW-Authenticate": "ApiKey, Bearer"}
                     )
                 
-                # Log successful authentication
-                if webhook_service and webhook_service.logger:
-                    webhook_service.logger.debug(f"Webhook authenticated successfully via {auth_method}")
-                    
-        except HTTPException:
-            # Re-raise HTTP exceptions
-            raise
-        except Exception as auth_error:
+            # Log successful authentication
             if webhook_service and webhook_service.logger:
-                webhook_service.logger.error(f"Error checking webhook auth: {str(auth_error)}")
-            # If auth is required but check failed, deny access (fail closed for security)
-            if settings.get("require_webhook_auth", False):
-                raise HTTPException(
-                    status_code=500,
-                    detail="Authentication service temporarily unavailable"
-                )
-            # Only allow through if auth is not required
-            pass
+                webhook_service.logger.debug(f"Webhook authenticated successfully via {auth_method}")
+                
+    except ImportError:
+        # Web database not available, skip auth check
+        if webhook_service and webhook_service.logger:
+            webhook_service.logger.debug("Web database not available, skipping webhook auth check")
+        WebDatabaseManager = None  # Define to avoid IDE warning
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as auth_error:
+        if webhook_service and webhook_service.logger:
+            webhook_service.logger.error(f"Error checking webhook auth: {str(auth_error)}")
+        # If we had an error and couldn't determine auth settings, fail closed for security
+        raise HTTPException(
+            status_code=500,
+            detail="Authentication service temporarily unavailable"
+        )
 
     try:
         # Get raw body once - we'll use it for both debug logging and parsing

@@ -31,7 +31,6 @@ import aiosqlite
 
 from .config_models import AppConfig, ConfigurationValidator
 from .webhook_models import WebhookPayload
-from .media_models import MediaItem
 from .database_models import DatabaseItem
 from .database_manager import DatabaseManager
 from .jellyfin_api import JellyfinAPI
@@ -1696,7 +1695,7 @@ class WebhookService:
                 self.logger.info(f"  Batch errors: {batch_errors:,}")
                 self.logger.info(f"  Processing time: {processing_time:.2f}s")
                 self.logger.info(f"  Throughput: {items_processed / processing_time:.1f} items/sec")
-                self.logger.info(f"  Batch size used: {api_batch_size:,}")
+                self.logger.info(f"  Batch size used: {sync_state.get('batch_size', 200):,}")
                 self.logger.info("=" * 80)
 
             return {
@@ -2153,7 +2152,7 @@ class WebhookService:
         
         try:
             # Create a minimal MediaItem for the deletion notification
-            from media_models import MediaItem
+            from .media_models import MediaItem
             
             deleted_item = MediaItem(
                 item_id=payload.ItemId,
@@ -2163,9 +2162,7 @@ class WebhookService:
                 server_name=payload.ServerName,
                 server_version=payload.ServerVersion,
                 server_url=payload.ServerUrl,
-                file_path=getattr(payload, 'Path', None),
-                content_hash="",  # Required field
-                timestamp_created=str(int(time.time()))
+                file_path=getattr(payload, 'Path', None)
             )
             
             # Send deletion notification

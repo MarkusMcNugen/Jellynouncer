@@ -80,7 +80,9 @@ The service acts as a smart filter between Jellyfin's webhook events and Discord
 
 ## ✨ Key Features
 
-### 🌐 Web Interface
+<details>
+<summary><h3>🌐 Web Interface</h3></summary>
+
 
 <details>
 <summary>📊 <b>Real-time Dashboard</b> - Monitor service health and statistics</summary>
@@ -182,9 +184,10 @@ The service acts as a smart filter between Jellyfin's webhook events and Discord
 
 </details>
 
-### 🧠 Smart Change Detection
+</details>
 
-#### Intelligent Media Analysis
+<details>
+<summary><h3>🧠 Smart Change Detection</h3></summary>
 
 <details>
 <summary>🎯 <b>Intelligent Analysis</b> - Distinguishes between new content and quality upgrades</summary>
@@ -371,7 +374,10 @@ To receive immediate deletion notifications without filtering, set `filter_delet
 
 </details>
 
-### 🚀 Multi-Channel Discord Routing
+</details>
+
+<details>
+<summary><h3>🚀 Multi-Channel Discord Routing</h3></summary>
 
 <details>
 <summary>📡 <b>Content-Type Routing</b> - Route different media to different Discord channels</summary>
@@ -487,7 +493,10 @@ To receive immediate deletion notifications without filtering, set `filter_delet
 
 </details>
 
-### 🎨 Advanced Template System
+</details>
+
+<details>
+<summary><h3>🎨 Advanced Template System</h3></summary>
 
 <details>
 <summary>🎭 <b>Jinja2 Templates</b> - Full control over Discord embed formatting</summary>
@@ -572,7 +581,10 @@ To receive immediate deletion notifications without filtering, set `filter_delet
 
 </details>
 
-### 📊 External Metadata Integration
+</details>
+
+<details>
+<summary><h3>📊 External Metadata Integration</h3></summary>
 
 <details>
 <summary>⭐ <b>Rating Services</b> - IMDb, TMDb, and TVDb integration</summary>
@@ -684,7 +696,10 @@ To receive immediate deletion notifications without filtering, set `filter_delet
 
 </details>
 
-### ⚡ Production-Ready Features
+</details>
+
+<details>
+<summary><h3>⚡ Production-Ready Features</h3></summary>
 
 <details>
 <summary>🗓️ <b>Database Persistence</b> - SQLite with WAL mode for reliability</summary>
@@ -826,7 +841,10 @@ delay = min(300, (2 ** attempt) * 10)
 
 </details>
 
-### 🚀 Deployment & Operations
+</details>
+
+<details>
+<summary><h3>🚀 Deployment & Operations</h3></summary>
 
 <details>
 <summary>🐳 <b>Docker-First Design</b> - Optimized containerization</summary>
@@ -1003,6 +1021,8 @@ JELLYNOUNCER_RUN_MODE=web
 - 24-hour activity graphs
 - Processing pipeline visualization
 - System health indicators
+
+</details>
 
 </details>
 

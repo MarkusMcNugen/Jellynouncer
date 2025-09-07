@@ -207,20 +207,25 @@ const jinja2Linter = () => (view) => {
     });
   }
   
-  // Check for missing endif/endfor/endblock
-  const ifCount = (text.match(/{% if /g) || []).length;
-  const endifCount = (text.match(/{% endif %}/g) || []).length;
-  if (ifCount !== endifCount) {
+  // Check for missing endif/endfor/endblock with proper whitespace control handling
+  // Match all variations: {% if, {%- if, {%+ if, etc.
+  const ifCount = (text.match(/{%-?\+?\s*if\s+/g) || []).length;
+  const elifCount = (text.match(/{%-?\+?\s*elif\s+/g) || []).length;
+  const endifCount = (text.match(/{%-?\+?\s*endif\s*-?\+?%}/g) || []).length;
+  
+  // For if/elif/endif, we need: one endif for each if (elif doesn't need its own endif)
+  const expectedEndifs = ifCount;
+  if (expectedEndifs !== endifCount) {
     diagnostics.push({
       from: 0,
       to: text.length,
       severity: 'error',
-      message: `Missing {% endif %} tags (${ifCount} if, ${endifCount} endif)`,
+      message: `Missing {% endif %} tags (${ifCount} if, ${elifCount} elif, ${endifCount} endif)`,
     });
   }
   
-  const forCount = (text.match(/{% for /g) || []).length;
-  const endforCount = (text.match(/{% endfor %}/g) || []).length;
+  const forCount = (text.match(/{%-?\+?\s*for\s+/g) || []).length;
+  const endforCount = (text.match(/{%-?\+?\s*endfor\s*-?\+?%}/g) || []).length;
   if (forCount !== endforCount) {
     diagnostics.push({
       from: 0,

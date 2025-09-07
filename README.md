@@ -1162,12 +1162,12 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| **Backend** | Python 3.13, FastAPI, SQLite, Pydantic v2 |
-| **Frontend** | React 19, Vite 6, Tailwind CSS |
-| **Tools** | Docker, ESLint 9, Prettier |
-| **Testing** | Pytest, React Testing Library |
+| Layer | Technology                                  |
+|-------|---------------------------------------------|
+| **Backend** | Python 3.13, FastAPI, SQLite, Pydantic v2   |
+| **Frontend** | React 19, Vite 7, Tailwind CSS, FontAwesome |
+| **Tools** | Docker, ESLint 9, Prettier                  |
+| **Testing** | Pytest, React Testing Library               |
 
 ## 📄 License
 

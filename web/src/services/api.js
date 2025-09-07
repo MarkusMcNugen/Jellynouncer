@@ -178,6 +178,8 @@ export const apiService = {
   
   // Logs
   getLogs: (params) => api.post('/api/logs', params),
+  getRawLogs: (params) => api.post('/api/logs/raw', params),
+  getLogFiles: () => api.get('/api/logs/files'),
   
   // Health
   healthCheck: () => api.get('/api/health'),

@@ -2032,6 +2032,49 @@ async def restore_template(name: str, current_user: Optional[Dict] = Depends(che
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@app.get("/api/logs/files")
+async def get_log_files(current_user: Optional[Dict] = Depends(check_auth_required)):
+    """Get list of available log files"""
+    try:
+        log_path = Path(LOG_DIR)
+        
+        # Try alternative paths if default doesn't exist
+        if not log_path.exists():
+            alt_paths = [
+                Path("logs"),
+                Path("/app/logs"),
+                Path("../logs")
+            ]
+            for alt_path in alt_paths:
+                if alt_path.exists():
+                    log_path = alt_path
+                    break
+            else:
+                return {"files": []}
+        
+        # Get all .log files in the directory
+        log_files = []
+        for file in log_path.glob("*.log"):
+            if file.is_file():
+                # Get file size and last modified time
+                stat = file.stat()
+                log_files.append({
+                    "name": file.name,
+                    "size": stat.st_size,
+                    "modified": stat.st_mtime,
+                    "size_readable": f"{stat.st_size / 1024 / 1024:.2f} MB" if stat.st_size > 1024 * 1024 else f"{stat.st_size / 1024:.2f} KB"
+                })
+        
+        # Sort by modified time (most recent first)
+        log_files.sort(key=lambda x: x["modified"], reverse=True)
+        
+        return {"files": log_files}
+        
+    except Exception as e:
+        logger.error(f"Failed to list log files: {e}")
+        return {"files": []}
+
+
 @app.post("/api/logs")
 async def get_logs(log_query: LogQuery, current_user: Optional[Dict] = Depends(check_auth_required)):
     """Get log entries"""
@@ -2041,6 +2084,70 @@ async def get_logs(log_query: LogQuery, current_user: Optional[Dict] = Depends(c
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.post("/api/logs/raw")
+async def get_raw_logs(log_query: LogQuery, current_user: Optional[Dict] = Depends(check_auth_required)):
+    """Get raw log content without parsing - preserves multi-line entries"""
+    try:
+        # Use the configured log directory
+        log_path = Path(LOG_DIR) / log_query.file
+        
+        if not log_path.exists():
+            # Try alternative paths
+            alt_paths = [
+                Path("logs") / log_query.file,
+                Path("/app/logs") / log_query.file,
+                Path("../logs") / log_query.file
+            ]
+            for alt_path in alt_paths:
+                if alt_path.exists():
+                    log_path = alt_path
+                    break
+            else:
+                raise ValueError(f"Log file {log_query.file} not found")
+        
+        # Read the raw log content
+        with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+            # Read all lines
+            lines = f.readlines()
+            
+            # Get the last N lines as requested
+            if log_query.lines and log_query.lines > 0:
+                lines = lines[-log_query.lines:]
+            
+            # Join lines to preserve original formatting
+            raw_content = ''.join(lines)
+            
+            # Apply simple text filtering if requested
+            if log_query.search:
+                filtered_lines = []
+                for line in lines:
+                    if log_query.search.lower() in line.lower():
+                        filtered_lines.append(line)
+                raw_content = ''.join(filtered_lines)
+            
+            if log_query.level:
+                filtered_lines = []
+                for line in lines:
+                    if f"[{log_query.level}]" in line:
+                        filtered_lines.append(line)
+                raw_content = ''.join(filtered_lines)
+            
+            if log_query.component:
+                filtered_lines = []
+                for line in lines:
+                    if f"[{log_query.component}" in line:
+                        filtered_lines.append(line)
+                raw_content = ''.join(filtered_lines)
+        
+        return {"content": raw_content, "type": "raw"}
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to get raw logs: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 

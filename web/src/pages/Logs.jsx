@@ -1,9 +1,9 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiService } from '../services/api'
-import { Icon, IconDuotone, IconLight } from '../components/FontAwesomeIcon'
+import { IconDuotone, IconLight } from '../components/FontAwesomeIcon'
 import { parseLogText, filterLogs, getLogStatistics, formatLogForDisplay, exportLogs, LOG_LEVEL_COLORS } from '../utils/logParser'
-import { FixedSizeList as VirtualList } from 'react-window'
+import { VariableSizeList as VirtualList } from 'react-window'
 import logger from '../services/logger'
 // Removed unused lucide-react import - using FontAwesome icons instead
 
@@ -12,6 +12,7 @@ const Logs = () => {
   
   const [logFile, setLogFile] = useState('jellynouncer.log')
   const [lines, setLines] = useState(500)
+  const [availableLogFiles, setAvailableLogFiles] = useState([])
   
   logger.debug('[COMPONENT] Logs: State hooks initialized');
   const [level, setLevel] = useState('')
@@ -22,11 +23,29 @@ const Logs = () => {
   
   const listRef = useRef(null)
   
-  // Fetch logs
+  // Fetch available log files on component mount
+  useEffect(() => {
+    apiService.getLogFiles()
+      .then(response => {
+        const files = response.data?.files || [];
+        setAvailableLogFiles(files);
+        logger.info('Logs: Available log files fetched', { count: files.length });
+        
+        // If current file doesn't exist in list, switch to first available
+        if (files.length > 0 && !files.find(f => f.name === logFile)) {
+          setLogFile(files[0].name);
+        }
+      })
+      .catch(err => {
+        logger.error('Logs: Failed to fetch available log files', err);
+      });
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Fetch logs - now using raw logs endpoint for better multi-line support
   const { data: logsResponse, refetch, isLoading } = useQuery({
     queryKey: ['logs', logFile, lines, level, component, search],
     queryFn: async () => {
-      logger.debug('Logs: Fetching logs', {
+      logger.debug('Logs: Fetching raw logs', {
         file: logFile,
         lines,
         level,
@@ -34,15 +53,16 @@ const Logs = () => {
         search
       });
       try {
-        const result = await apiService.getLogs({
+        const result = await apiService.getRawLogs({
           file: logFile,
           lines,
           level: level || undefined,
           component: component || undefined,
           search: search || undefined
         });
-        logger.info('Logs: Data received', {
-          logCount: result?.data?.logs?.length || 0,
+        logger.info('Logs: Raw data received', {
+          dataType: result?.data?.type,
+          contentLength: result?.data?.content?.length || 0,
           hasData: !!result?.data
         });
         return result;
@@ -62,21 +82,22 @@ const Logs = () => {
     
     let logText = '';
     
-    // Check if we have raw log content or parsed logs
-    if (typeof logsResponse.data === 'string') {
-      // Raw log text - use directly
+    // We now always get raw content from the new endpoint
+    if (logsResponse.data.type === 'raw' && logsResponse.data.content) {
+      // Raw content from our new endpoint
+      logText = logsResponse.data.content;
+    } else if (typeof logsResponse.data === 'string') {
+      // Fallback: Raw log text - use directly
       logText = logsResponse.data;
     } else if (logsResponse.data.content) {
-      // Raw content field
+      // Fallback: Raw content field
       logText = logsResponse.data.content;
     } else if (logsResponse.data.logs && Array.isArray(logsResponse.data.logs)) {
-      // Pre-parsed logs - reconstruct (this will lose multi-line formatting)
-      // This is a fallback and won't properly handle multi-line logs
+      // Fallback: Pre-parsed logs - reconstruct (this will lose multi-line formatting)
+      console.warn('Using pre-parsed logs - multi-line entries may not display correctly');
       logText = logsResponse.data.logs.map(log => 
         `[${log.timestamp}][${log.level}][${log.component}] ${log.message}`
       ).join('\n');
-      
-      console.warn('Using pre-parsed logs - multi-line entries may not display correctly');
     }
     
     const parsed = parseLogText(logText)
@@ -92,12 +113,12 @@ const Logs = () => {
       case 'ERROR':
       case 'CRITICAL':
       case 'FATAL':
-        return <IconDuotone icon="exclamation-circle" size="xs" className="text-red-500" />
+        return <IconDuotone icon="circle-exclamation" size="xs" className="text-red-500" />
       case 'WARNING':
       case 'WARN':
-        return <IconDuotone icon="exclamation-triangle" size="xs" className="text-yellow-500" />
+        return <IconDuotone icon="triangle-exclamation" size="xs" className="text-yellow-500" />
       case 'INFO':
-        return <IconDuotone icon="info-circle" size="xs" className="text-blue-500" />
+        return <IconDuotone icon="circle-info" size="xs" className="text-blue-500" />
       case 'DEBUG':
         return <IconDuotone icon="bug" size="xs" className="text-gray-500" />
       default:
@@ -221,7 +242,7 @@ const Logs = () => {
               className="btn btn-secondary"
               disabled={isLoading}
             >
-              <IconDuotone icon="sync-alt" spin={isLoading} />
+              <IconDuotone icon="arrows-rotate" spin={isLoading} />
             </button>
           </div>
         </div>
@@ -233,9 +254,15 @@ const Logs = () => {
             value={logFile}
             onChange={(e) => setLogFile(e.target.value)}
           >
-            <option value="jellynouncer.log">Main Log</option>
-            <option value="error.log">Error Log</option>
-            <option value="debug.log">Debug Log</option>
+            {availableLogFiles.length > 0 ? (
+              availableLogFiles.map(file => (
+                <option key={file.name} value={file.name}>
+                  {file.name} ({file.size_readable})
+                </option>
+              ))
+            ) : (
+              <option value="jellynouncer.log">jellynouncer.log</option>
+            )}
           </select>
           
           <select 
@@ -281,13 +308,13 @@ const Logs = () => {
             <option value={5000}>Last 5000</option>
           </select>
           
-          <div className="relative">
+          <div className="relative group">
             <button className="btn btn-secondary flex items-center gap-2">
               <IconDuotone icon="download" size="sm" />
               Export
               <IconLight icon="chevron-down" size="xs" />
             </button>
-            <div className="absolute right-0 mt-1 w-32 bg-dark-elevated rounded-lg shadow-lg hidden group-hover:block">
+            <div className="absolute right-0 mt-1 w-32 bg-dark-elevated rounded-lg shadow-lg hidden group-hover:block z-10">
               <button 
                 onClick={() => handleExport('txt')}
                 className="w-full px-4 py-2 text-left hover:bg-dark-border text-sm"
@@ -342,14 +369,14 @@ const Logs = () => {
             
             {stats.errorCount > 0 && (
               <div className="flex items-center gap-2 text-red-500">
-                <IconDuotone icon="exclamation-circle" size="xs" />
+                <IconDuotone icon="circle-exclamation" size="xs" />
                 <span>{stats.errorCount} errors</span>
               </div>
             )}
             
             {stats.warningCount > 0 && (
               <div className="flex items-center gap-2 text-yellow-500">
-                <IconDuotone icon="exclamation-triangle" size="xs" />
+                <IconDuotone icon="triangle-exclamation" size="xs" />
                 <span>{stats.warningCount} warnings</span>
               </div>
             )}
@@ -368,7 +395,27 @@ const Logs = () => {
             ref={listRef}
             height={window.innerHeight - 200} // Adjust based on header height
             itemCount={parsedLogs.length}
-            itemSize={60} // Increased height to accommodate multi-line messages
+            itemSize={(index) => {
+              // Calculate dynamic height based on log content
+              const log = parsedLogs[index];
+              if (!log) return 60;
+              
+              // Base height for single line
+              let height = 60;
+              
+              // Add extra height for multi-line messages
+              if (log.message) {
+                // Count newlines in the message
+                const lineCount = (log.message.match(/\n/g) || []).length + 1;
+                // Add 20px per additional line
+                height = 60 + (lineCount - 1) * 20;
+                
+                // Cap maximum height to prevent extremely tall entries
+                height = Math.min(height, 300);
+              }
+              
+              return height;
+            }}
             width="100%"
             className="scrollbar-thin scrollbar-thumb-dark-border scrollbar-track-dark-surface"
             style={{ overflowX: 'hidden' }}
@@ -378,7 +425,7 @@ const Logs = () => {
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <IconLight icon="info-circle" size="3x" className="text-dark-text-muted mx-auto mb-4" />
+              <IconLight icon="circle-info" size="3x" className="text-dark-text-muted mx-auto mb-4" />
               <p className="text-dark-text-secondary">No logs found</p>
               <p className="text-sm text-dark-text-muted mt-2">
                 Try adjusting your filters or refreshing

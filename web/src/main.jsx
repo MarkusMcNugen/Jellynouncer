@@ -6,9 +6,6 @@ import { Toaster } from 'react-hot-toast'
 import App from './App'
 import './styles/index.css'
 
-// Import Font Awesome Free 7 from local files
-import './assets/fontawesome/css/all.min.css'
-
 // Create a query client with default options
 const queryClient = new QueryClient({
   defaultOptions: {

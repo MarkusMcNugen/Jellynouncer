@@ -107,7 +107,7 @@ const AuthSetup = ({ onClose, onComplete }) => {
               onClick={onClose}
               className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
             >
-              <Icon icon="times" />
+              <Icon icon="xmark" />
             </button>
           )}
         </div>
@@ -147,7 +147,7 @@ const AuthSetup = ({ onClose, onComplete }) => {
               
               <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4">
                 <div className="flex">
-                  <IconDuotone icon="exclamation-triangle" className="text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <IconDuotone icon="triangle-exclamation" className="text-amber-600 dark:text-amber-400 mt-0.5" />
                   <div className="ml-3 text-sm text-gray-700 dark:text-gray-300">
                     <p className="font-semibold">Important:</p>
                     <p>Make sure to remember your credentials. You&apos;ll need them to access the interface once authentication is enabled.</p>
@@ -295,7 +295,7 @@ const AuthSetup = ({ onClose, onComplete }) => {
               
               <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4">
                 <div className="flex">
-                  <IconDuotone icon="exclamation-triangle" className="text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <IconDuotone icon="triangle-exclamation" className="text-amber-600 dark:text-amber-400 mt-0.5" />
                   <div className="ml-3 text-sm text-gray-700 dark:text-gray-300">
                     <p className="font-semibold">Next Step:</p>
                     <p>When you click &quot;Enable Authentication&quot;, you will be immediately logged out and must sign in with your new credentials.</p>

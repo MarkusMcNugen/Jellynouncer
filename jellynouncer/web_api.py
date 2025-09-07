@@ -2259,22 +2259,7 @@ async def debug_static_files():
                     "count": len(asset_files),
                     "files": asset_files[:20]  # First 20 files
                 }
-                
-                # Check specific failing assets
-                failing_assets = [
-                    "index-BdASS8Ro.css",
-                    "index-Brl9qVFk.js", 
-                    "vendor-bSNdPxfD.js",
-                    "charts-DRG5hiZT.js"
-                ]
-                
-                for asset in failing_assets:
-                    asset_path = os.path.join(assets_path, asset)
-                    result["specific_assets"][asset] = {
-                        "exists": os.path.exists(asset_path),
-                        "size": os.path.getsize(asset_path) if os.path.exists(asset_path) else 0,
-                        "full_path": asset_path
-                    }
+
             else:
                 result["contents"]["assets"] = "Directory not found"
                 
@@ -2537,20 +2522,7 @@ if os.path.exists(web_dist_path):
         assets_path = os.path.join(web_dist_path, "assets")
         if os.path.exists(assets_path):
             logger.debug("✓ Assets directory exists")
-            failing_assets = [
-                "index-BdASS8Ro.css",
-                "index-Tty_PeQt.js",
-                "vendor-bSNdPxfD.js",
-                "charts-DRG5hiZT.js"
-            ]
-            logger.debug("Checking for specific failing assets:")
-            for asset in failing_assets:
-                asset_path = os.path.join(assets_path, asset)
-                if os.path.exists(asset_path):
-                    size = os.path.getsize(asset_path)
-                    logger.debug(f"  ✓ {asset} EXISTS ({size:,} bytes)")
-                else:
-                    logger.error(f"  ✗ {asset} NOT FOUND")
+
         else:
             logger.error(f"✗ Assets directory NOT FOUND at {assets_path}")
             

@@ -18,7 +18,7 @@ const Logs = () => {
   const [level, setLevel] = useState('')
   const [component, setComponent] = useState('')
   const [search, setSearch] = useState('')
-  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [autoRefresh, setAutoRefresh] = useState(true)
   const [showStats] = useState(true) // Could be toggled in future
   
   const listRef = useRef(null)
@@ -102,9 +102,11 @@ const Logs = () => {
     
     const parsed = parseLogText(logText)
     const filtered = filterLogs(parsed, { level, component, search })
+    // Reverse the logs to show most recent first
+    const reversed = filtered.slice().reverse()
     const statistics = getLogStatistics(filtered)
     
-    return { parsedLogs: filtered, stats: statistics }
+    return { parsedLogs: reversed, stats: statistics }
   }, [logsResponse, level, component, search])
   
   // Get log level icon
@@ -287,7 +289,7 @@ const Logs = () => {
           />
           
           <div className="flex-1 relative">
-            <IconLight icon="search" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-text-muted" size="lg" />
+            <IconLight icon="magnifying-glass" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-text-muted" size="lg" />
             <input 
               type="text"
               className="input pl-10 w-full"

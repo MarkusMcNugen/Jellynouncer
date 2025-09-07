@@ -34,7 +34,7 @@ const WebhookTokenDisplay = ({ onClose }) => {
             onClick={onClose}
             className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
           >
-            <Icon icon="times" />
+            <Icon icon="xmark" />
           </button>
         </div>
 
@@ -108,7 +108,7 @@ const WebhookTokenDisplay = ({ onClose }) => {
           {/* Warning */}
           <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4">
             <div className="flex">
-              <IconDuotone icon="exclamation-triangle" className="text-amber-600 dark:text-amber-400 mt-0.5" />
+              <IconDuotone icon="triangle-exclamation" className="text-amber-600 dark:text-amber-400 mt-0.5" />
               <div className="ml-3 text-sm text-gray-700 dark:text-gray-300">
                 <p className="font-semibold">Security Notice:</p>
                 <ul className="list-disc list-inside mt-1 space-y-1">

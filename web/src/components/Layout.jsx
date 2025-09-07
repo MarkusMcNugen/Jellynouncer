@@ -17,10 +17,10 @@ const Layout = () => {
   const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   const navigation = [
-    { name: 'Overview', href: '/', icon: 'home', style: 'duotone' },
-    { name: 'Configuration', href: '/config', icon: 'cogs', style: 'duotone' },
+    { name: 'Overview', href: '/', icon: 'house', style: 'duotone' },
+    { name: 'Configuration', href: '/config', icon: 'gears', style: 'duotone' },
     { name: 'Templates', href: '/templates', icon: 'file-code', style: 'duotone' },
-    { name: 'Logs', href: '/logs', icon: 'search-plus', style: 'duotone' },
+    { name: 'Logs', href: '/logs', icon: 'magnifying-glass-plus', style: 'duotone' },
   ];
 
   // Log navigation changes
@@ -59,7 +59,7 @@ const Layout = () => {
               onClick={() => setSidebarOpen(false)}
               className="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
             >
-              <IconLight icon="times" size="lg" />
+              <IconLight icon="xmark" size="lg" />
             </button>
           </div>
           
@@ -101,7 +101,7 @@ const Layout = () => {
                     className="p-2 text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300"
                     title="Enable Authentication"
                   >
-                    <IconDuotone icon="exclamation-triangle" size="sm" />
+                    <IconDuotone icon="triangle-exclamation" size="sm" />
                   </button>
                 )}
                 {authRequired && (
@@ -118,7 +118,7 @@ const Layout = () => {
                       className="p-2 text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
                       title="Logout"
                     >
-                      <IconDuotone icon="sign-out-alt" size="sm" />
+                      <IconDuotone icon="right-from-bracket" size="sm" />
                     </button>
                   </>
                 )}
@@ -175,7 +175,7 @@ const Layout = () => {
                     className="p-2 text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300"
                     title="Enable Authentication"
                   >
-                    <IconDuotone icon="exclamation-triangle" size="sm" />
+                    <IconDuotone icon="triangle-exclamation" size="sm" />
                   </button>
                 )}
                 {authRequired && (
@@ -192,7 +192,7 @@ const Layout = () => {
                       className="p-2 text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
                       title="Logout"
                     >
-                      <IconDuotone icon="sign-out-alt" size="sm" />
+                      <IconDuotone icon="right-from-bracket" size="sm" />
                     </button>
                   </>
                 )}

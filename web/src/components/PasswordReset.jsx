@@ -93,7 +93,7 @@ const PasswordReset = ({ onClose }) => {
             onClick={onClose}
             className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
           >
-            <Icon icon="times" />
+            <Icon icon="xmark" />
           </button>
         </div>
 

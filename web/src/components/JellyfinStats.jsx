@@ -77,7 +77,7 @@ const JellyfinStats = ({ stats }) => {
         {stats.last_error && (
           <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
             <p className="text-sm text-red-800 dark:text-red-200">
-              <IconDuotone icon="exclamation-triangle" className="mr-2 text-yellow-500" />
+              <IconDuotone icon="triangle-exclamation" className="mr-2 text-yellow-500" />
               {stats.last_error}
             </p>
           </div>

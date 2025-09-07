@@ -100,20 +100,36 @@ class ServiceLauncher:
     
     def start_web_service(self):
         """Start the web interface in a separate process"""
+        # Log to stdout first before any imports
+        print(f"[WEB SUBPROCESS] Starting web service process (PID: {os.getpid()})")
+        
         try:
             # Set environment variable to indicate we're in a subprocess
             os.environ['JELLYNOUNCER_SUBPROCESS'] = 'web'
+            print("[WEB SUBPROCESS] Environment variable set")
             
             # Setup logging for the subprocess but skip the banner
             log_level = os.environ.get("LOG_LEVEL", "INFO")
             log_dir = os.environ.get("LOG_DIR", "/app/logs")
             if not os.path.exists('/.dockerenv'):
                 log_dir = "logs"
+            print(f"[WEB SUBPROCESS] Log config: level={log_level}, dir={log_dir}")
             
             # Import here since subprocess needs fresh import
-            from jellynouncer.utils import setup_logging, setup_web_logging, get_logger, get_web_logger
+            print("[WEB SUBPROCESS] Importing logging utilities...")
+            try:
+                from jellynouncer.utils import setup_logging, setup_web_logging, get_logger, get_web_logger
+                print("[WEB SUBPROCESS] Logging utilities imported successfully")
+            except Exception as e:
+                print(f"[WEB SUBPROCESS] ERROR importing logging utilities: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
+            
+            print("[WEB SUBPROCESS] Setting up web logging...")
             setup_web_logging(log_level, log_dir)
             logger = get_web_logger("launcher.web_subprocess")
+            logger.info("Web logging initialized successfully")
             
             logger.info("Web service process started, importing web_api...")
             

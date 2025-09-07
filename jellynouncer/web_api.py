@@ -49,41 +49,122 @@ import aiosqlite
 import jwt
 from passlib.context import CryptContext
 
+# Add early debug logging before any imports
+print(f"[WEB_API MODULE] Starting web_api.py import (Python {sys.version})", flush=True)
+
 # Import Jellynouncer modules
-from jellynouncer.config_models import ConfigurationValidator
-from jellynouncer.utils import get_web_logger, setup_web_logging
-from jellynouncer.backup_manager import BackupManager
+print("[WEB_API MODULE] Importing config_models...", flush=True)
+try:
+    from jellynouncer.config_models import ConfigurationValidator
+    print("[WEB_API MODULE] config_models imported successfully", flush=True)
+except Exception as e:
+    print(f"[WEB_API MODULE] ERROR importing config_models: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    raise
+
+print("[WEB_API MODULE] Importing utils...", flush=True)
+try:
+    from jellynouncer.utils import get_web_logger, setup_web_logging
+    print("[WEB_API MODULE] utils imported successfully", flush=True)
+except Exception as e:
+    print(f"[WEB_API MODULE] ERROR importing utils: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    raise
+
+print("[WEB_API MODULE] Importing backup_manager...", flush=True)
+try:
+    from jellynouncer.backup_manager import BackupManager
+    print("[WEB_API MODULE] backup_manager imported successfully", flush=True)
+except Exception as e:
+    print(f"[WEB_API MODULE] ERROR importing backup_manager: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    raise
 
 # Log early to catch import issues
-early_logger = get_web_logger("jellynouncer.web_api.imports")
-early_logger.debug("Starting Jellynouncer module imports...")
+print("[WEB_API MODULE] Setting up early logger...", flush=True)
+try:
+    early_logger = get_web_logger("jellynouncer.web_api.imports")
+    early_logger.debug("Starting Jellynouncer module imports...")
+    print("[WEB_API MODULE] Early logger setup complete", flush=True)
+except Exception as e:
+    print(f"[WEB_API MODULE] ERROR setting up early logger: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    # Continue anyway
+    early_logger = None
 
 try:
+    print("[WEB_API MODULE] Attempting to import WebhookService...", flush=True)
     from jellynouncer.webhook_service import WebhookService
-    early_logger.debug("WebhookService imported successfully")
+    if early_logger:
+        early_logger.debug("WebhookService imported successfully")
+    print("[WEB_API MODULE] WebhookService imported successfully", flush=True)
 except ImportError as e:
-    early_logger.error(f"Failed to import WebhookService: {e}")
+    if early_logger:
+        early_logger.error(f"Failed to import WebhookService: {e}")
+    print(f"[WEB_API MODULE] Failed to import WebhookService (non-fatal): {e}", flush=True)
     WebhookService = None
 
 try:
+    print("[WEB_API MODULE] Attempting to import JellyfinAPI...", flush=True)
     from jellynouncer.jellyfin_api import JellyfinAPI
-    early_logger.debug("JellyfinAPI imported successfully")
+    if early_logger:
+        early_logger.debug("JellyfinAPI imported successfully")
+    print("[WEB_API MODULE] JellyfinAPI imported successfully", flush=True)
 except ImportError as e:
-    early_logger.error(f"Failed to import JellyfinAPI: {e}")
+    if early_logger:
+        early_logger.error(f"Failed to import JellyfinAPI: {e}")
+    print(f"[WEB_API MODULE] Failed to import JellyfinAPI (non-fatal): {e}", flush=True)
     JellyfinAPI = None
 
 try:
+    print("[WEB_API MODULE] Attempting to import DatabaseManager...", flush=True)
     from jellynouncer.database_manager import DatabaseManager
-    early_logger.debug("DatabaseManager imported successfully")
+    if early_logger:
+        early_logger.debug("DatabaseManager imported successfully")
+    print("[WEB_API MODULE] DatabaseManager imported successfully", flush=True)
 except ImportError as e:
-    early_logger.error(f"Failed to import DatabaseManager: {e}")
+    if early_logger:
+        early_logger.error(f"Failed to import DatabaseManager: {e}")
+    print(f"[WEB_API MODULE] Failed to import DatabaseManager (non-fatal): {e}", flush=True)
     DatabaseManager = None
 
-from jellynouncer.ssl_manager import SSLManager, setup_ssl_routes
-from jellynouncer.security_middleware import setup_security_middleware
-from jellynouncer.web_database import WebDatabaseManager
+print("[WEB_API MODULE] Importing ssl_manager...", flush=True)
+try:
+    from jellynouncer.ssl_manager import SSLManager, setup_ssl_routes
+    print("[WEB_API MODULE] ssl_manager imported successfully", flush=True)
+except Exception as e:
+    print(f"[WEB_API MODULE] ERROR importing ssl_manager: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    raise
 
-early_logger.debug("All imports completed")
+print("[WEB_API MODULE] Importing security_middleware...", flush=True)
+try:
+    from jellynouncer.security_middleware import setup_security_middleware
+    print("[WEB_API MODULE] security_middleware imported successfully", flush=True)
+except Exception as e:
+    print(f"[WEB_API MODULE] ERROR importing security_middleware: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    raise
+
+print("[WEB_API MODULE] Importing web_database...", flush=True)
+try:
+    from jellynouncer.web_database import WebDatabaseManager
+    print("[WEB_API MODULE] web_database imported successfully", flush=True)
+except Exception as e:
+    print(f"[WEB_API MODULE] ERROR importing web_database: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    raise
+
+if early_logger:
+    early_logger.debug("All imports completed")
+print("[WEB_API MODULE] All module imports completed successfully", flush=True)
 
 # Constants
 WEB_DB_PATH = "data/web_interface.db"
@@ -526,8 +607,9 @@ class WebInterfaceService:
             self.logger.debug("Initializing backup manager...")
             backup_config = self.config.backup.model_dump() if hasattr(self.config, 'backup') else {}
             self.backup_manager = BackupManager(backup_config)
-            await self.backup_manager.initialize()
-            self.logger.debug("Backup manager initialized successfully")
+            # BackupManager is initialized in __init__, start scheduler instead
+            await self.backup_manager.start_scheduler()
+            self.logger.debug("Backup manager initialized and scheduler started")
             
             # Initialize Jellyfin API client
             self.logger.debug("Initializing Jellyfin API client...")

@@ -1238,7 +1238,7 @@ Jellynouncer uses Jinja2 templates for complete control over Discord embed forma
 | **Grouped by Type** | Group by content type | `new_items_by_type.j2`, `upgraded_items_by_type.j2` |
 | **Fully Grouped** | Combined grouping | `new_items_grouped.j2`, `upgraded_items_grouped.j2` |
 
-**📚 [Complete Template Guide →](templates/Readme.md)**
+**📚 [Complete Template Guide →](templates/README.md)**
 
 
 ## ⚙️ Configuration
@@ -1319,7 +1319,7 @@ Configuration can be managed through:
 
 </details>
 
-**📚 [Complete Configuration Guide →](config/Readme.md)**
+**📚 [Complete Configuration Guide →](config/README.md)**
 
 ## 🔄 How It Works
 
@@ -1601,12 +1601,12 @@ When `LOG_LEVEL=DEBUG`, the service will log:
 
 ## 📚 Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Configuration Guide](config/Readme.md) | Complete configuration reference |
-| [Template Guide](templates/Readme.md) | Template customization and examples |
+| Document                                    | Description |
+|---------------------------------------------|-------------|
+| [Configuration Guide](config/README.md)     | Complete configuration reference |
+| [Template Guide](templates/README.md)       | Template customization and examples |
 | [Web Interface Guide](docs/WebInterface.md) | Detailed web interface documentation |
-| [API Reference](docs/API.md) | Complete API endpoint documentation |
+| [API Reference](docs/API.md)                | Complete API endpoint documentation |
 
 ## 🤝 Contributing
 

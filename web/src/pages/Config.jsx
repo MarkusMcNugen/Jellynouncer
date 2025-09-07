@@ -1105,7 +1105,6 @@ const Config = () => {
                       checked={config.web_interface.require_webhook_auth || false}
                       onChange={(e) => handleInputChange('web_interface', 'require_webhook_auth', e.target.checked)}
                       className="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                      disabled={!config.web_interface.auth_enabled}
                     />
                     <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Require Webhook Authentication
@@ -1117,6 +1116,13 @@ const Config = () => {
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         Webhooks must authenticate using API Keys or JWT tokens
                       </p>
+                      {!config.web_interface.auth_enabled && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
+                          <p className="text-xs text-amber-800 dark:text-amber-300">
+                            <strong>⚠️ Warning:</strong> Web authentication is disabled. Make sure you have created API keys below or webhooks will fail to authenticate.
+                          </p>
+                        </div>
+                      )}
                       <div className="flex gap-2">
                         <button
                           type="button"

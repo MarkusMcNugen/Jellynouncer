@@ -120,11 +120,40 @@ const WebhookApiKeys = () => {
 
   const copyToClipboard = async (text) => {
     try {
-      await navigator.clipboard.writeText(text);
-      alert('API key copied to clipboard');
+      // Try the modern clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        alert('API key copied to clipboard');
+        return;
+      }
+      
+      // Fallback method for non-HTTPS or older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          alert('API key copied to clipboard');
+        } else {
+          throw new Error('Copy command failed');
+        }
+      } catch (err) {
+        // If copy still fails, show the key in a prompt for manual copying
+        prompt('Failed to copy automatically. Please copy the API key manually:', text);
+      } finally {
+        document.body.removeChild(textArea);
+      }
     } catch (err) {
       logger.error('Failed to copy to clipboard', err);
-      alert('Failed to copy to clipboard');
+      // Show the key in a prompt as last resort
+      prompt('Failed to copy automatically. Please copy the API key manually:', text);
     }
   };
 

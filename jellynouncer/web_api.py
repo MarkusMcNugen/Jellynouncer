@@ -2355,8 +2355,8 @@ async def get_notifications(
                 "total_pages": 0
             }
     except Exception as e:
-        logger.error(f"[API] Error fetching notifications: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch notifications")
+        logger.error(f"[API] Error fetching notifications: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch notifications: {str(e)}")
 
 
 @app.get("/api/overview", response_model=OverviewStats)

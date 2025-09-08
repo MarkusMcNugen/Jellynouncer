@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiService } from '../services/api'
-import { IconDuotone, IconLight, IconSolid } from '../components/FontAwesomeIcon'
+import { IconDuotone, IconSolid } from '../components/FontAwesomeIcon'
 import { parseLogText, filterLogs, getLogStatistics, formatLogForDisplay, exportLogs, LOG_LEVEL_COLORS } from '../utils/logParser'
 import { VariableSizeList as VirtualList } from 'react-window'
 import logger from '../services/logger'

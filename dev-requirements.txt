@@ -1,0 +1,28 @@
+# Development and debugging tools - NOT for production
+# Install with: pip install -r dev-requirements.txt
+# These tools are for local development only and should NOT be included in Docker images
+
+# Python Debugging
+debugpy==1.8.16           # Remote debugging support for VS Code/PyCharm
+
+# Database Tools  
+sqlite-web==0.6.4         # Web-based SQLite browser (http://localhost:8080)
+
+# Console Enhancement
+rich==14.1.0              # Beautiful terminal output with tables, progress bars
+
+# Code Quality Tools
+pre-commit==4.3.0         # Git hooks for code quality enforcement
+mypy==1.17.1              # Static type checking for Python
+bandit[toml]==1.8.6       # Security vulnerability scanner
+
+# Additional development dependencies that may be useful
+black==24.10.0            # Code formatter (used by pre-commit)
+ruff==0.9.1               # Fast Python linter
+pytest==8.3.5             # Testing framework
+pytest-asyncio==0.24.0   # Async test support
+pytest-cov==6.0.0         # Coverage reporting
+
+# Performance profiling
+memory-profiler==0.61.0   # Memory usage profiling
+py-spy==0.3.14            # Sampling profiler for Python

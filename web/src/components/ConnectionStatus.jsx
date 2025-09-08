@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from './FontAwesomeIcon';
 import { apiClient, webhookClient } from '../utils/apiClient';
 
@@ -12,7 +12,7 @@ const ConnectionStatus = () => {
     try {
       await apiClient.get('/api/health');
       setWebApiStatus('online');
-    } catch (error) {
+    } catch {
       setWebApiStatus('offline');
     }
 
@@ -20,7 +20,7 @@ const ConnectionStatus = () => {
     try {
       await webhookClient.get('/health');
       setWebhookStatus('online');
-    } catch (error) {
+    } catch {
       setWebhookStatus('offline');
     }
 
@@ -72,25 +72,31 @@ const ConnectionStatus = () => {
 
   return (
     <div className="flex items-center space-x-4 text-sm">
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1">
         <span className="text-gray-500 dark:text-gray-400">Web API:</span>
+        <span className={`font-medium capitalize ${getStatusColor(webApiStatus)}`}>
+          {webApiStatus}
+        </span>
         <Icon
           icon={getStatusIcon(webApiStatus)}
           className={`${getStatusColor(webApiStatus)} ${
             webApiStatus === 'checking' ? 'animate-spin' : ''
           }`}
-          title={`Web API is ${webApiStatus}`}
+          size="sm"
         />
       </div>
       
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1">
         <span className="text-gray-500 dark:text-gray-400">Webhooks:</span>
+        <span className={`font-medium capitalize ${getStatusColor(webhookStatus)}`}>
+          {webhookStatus}
+        </span>
         <Icon
           icon={getStatusIcon(webhookStatus)}
           className={`${getStatusColor(webhookStatus)} ${
             webhookStatus === 'checking' ? 'animate-spin' : ''
           }`}
-          title={`Webhook service is ${webhookStatus}`}
+          size="sm"
         />
       </div>
       

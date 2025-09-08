@@ -5,7 +5,7 @@ import ConnectionStatus from './ConnectionStatus';
 import DarkModeToggle from './DarkModeToggle';
 import AuthSetup from './AuthSetup';
 import PasswordReset from './PasswordReset';
-import { Icon, IconDuotone, IconLight } from './FontAwesomeIcon';
+import { IconDuotone, IconLight } from './FontAwesomeIcon';
 import logger from '../services/logger';
 import packageJson from '../../package.json';
 
@@ -70,24 +70,9 @@ const Layout = () => {
     return active;
   };
   
-  const handleNavClick = (item) => {
-    logger.debug('[Layout] Navigation item clicked', {
-      name: item.name,
-      href: item.href,
-      fromPath: location.pathname
-    });
-    setSidebarOpen(false);
-  };
-  
-  const handleAuthSetupToggle = (show) => {
-    logger.debug('[Layout] Auth setup modal toggled', { show });
-    setShowAuthSetup(show);
-  };
-  
-  const handlePasswordResetToggle = (show) => {
-    logger.debug('[Layout] Password reset modal toggled', { show });
-    setShowPasswordReset(show);
-  };
+  // These handlers were removed as they're not being used
+  // Navigation clicks are handled directly in onClick props
+  // Modal toggles are handled with setShowAuthSetup/setShowPasswordReset directly
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">

@@ -47,7 +47,7 @@ const Tooltip = ({ text, position = 'top' }) => {
       {showTooltip && (
         <div className={`absolute z-50 ${getPositionClasses()} pointer-events-none`}>
           <div className="relative">
-            <div className="bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg py-2.5 px-4 min-w-[250px] max-w-sm whitespace-pre-wrap leading-relaxed shadow-lg">
+            <div className="bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg py-2.5 px-4 min-w-[350px] max-w-md whitespace-pre-wrap leading-relaxed shadow-lg">
               {text}
             </div>
             <div className={`absolute ${getArrowClasses()}`} />

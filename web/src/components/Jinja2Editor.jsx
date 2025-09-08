@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { vscodeDark, vscodeLight } from '@uiw/codemirror-theme-vscode';
-import { python } from '@codemirror/lang-python';
-import { html } from '@codemirror/lang-html';
+// Language modules imported but not directly used - they're registered with CodeMirror
+// import { python } from '@codemirror/lang-python';
+// import { html } from '@codemirror/lang-html';
 import { StreamLanguage } from '@codemirror/language';
-import { autocompletion, CompletionContext } from '@codemirror/autocomplete';
+import { autocompletion } from '@codemirror/autocomplete';
 import { linter } from '@codemirror/lint';
 import { search, searchKeymap } from '@codemirror/search';
 import { keymap, EditorView } from '@codemirror/view';

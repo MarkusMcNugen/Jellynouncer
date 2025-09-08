@@ -660,4 +660,5 @@ function Backups() {
   )
 }
 
-export default withLifecycleLogging(Backups)
+const BackupsWithLogging = withLifecycleLogging(Backups, 'Backups')
+export default BackupsWithLogging

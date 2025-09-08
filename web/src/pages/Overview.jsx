@@ -15,7 +15,6 @@ import {
   Filler,
 } from 'chart.js';
 import { apiService } from '../services/api';
-import JellyfinStats from '../components/JellyfinStats';
 import { Icon } from '../components/FontAwesomeIcon';
 import logger from '../services/logger';
 
@@ -191,31 +190,6 @@ const Overview = () => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const getHealthColor = (status) => {
-    switch (status) {
-      case 'healthy':
-        return 'text-green-600 bg-green-100';
-      case 'degraded':
-        return 'text-yellow-600 bg-yellow-100';
-      case 'unhealthy':
-        return 'text-red-600 bg-red-100';
-      default:
-        return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  const getHealthIcon = (status) => {
-    switch (status) {
-      case 'healthy':
-        return 'circle-check';
-      case 'degraded':
-        return 'triangle-exclamation';
-      case 'unhealthy':
-        return 'circle-xmark';
-      default:
-        return 'server';
-    }
-  };
 
   const getContentIcon = (type) => {
     switch (type?.toLowerCase()) {
@@ -529,9 +503,63 @@ const Overview = () => {
 
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center">
                     Local Database Sync
+                    {/* Animated sync icon - only visible when syncing */}
+                    {stats?.synced_items?.is_syncing && (
+                      <div className="ml-2 relative group">
+                        <Icon 
+                          icon="sync" 
+                          className="animate-spin text-purple-600 dark:text-purple-400" 
+                          size="sm" 
+                        />
+                        {/* Detailed tooltip on hover */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                          <div className="text-xs space-y-1">
+                            <div className="font-semibold text-purple-300 mb-2">Sync in Progress</div>
+                            <div className="flex justify-between">
+                              <span>Progress:</span>
+                              <span className="font-medium">{(stats.synced_items.sync_progress || 0).toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Items:</span>
+                              <span className="font-medium">
+                                {formatNumber(stats.synced_items.items_processed || 0)} / {formatNumber(stats.synced_items.items_total || 0)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Speed:</span>
+                              <span className="font-medium">{(stats.synced_items.items_per_second || 0).toFixed(1)} items/sec</span>
+                            </div>
+                            {stats.synced_items.eta_seconds && (
+                              <div className="flex justify-between">
+                                <span>ETA:</span>
+                                <span className="font-medium">
+                                  {stats.synced_items.eta_seconds > 60 
+                                    ? `${Math.floor(stats.synced_items.eta_seconds / 60)}m ${stats.synced_items.eta_seconds % 60}s`
+                                    : `${stats.synced_items.eta_seconds}s`
+                                  }
+                                </span>
+                              </div>
+                            )}
+                            {/* Progress bar in tooltip */}
+                            <div className="mt-2">
+                              <div className="w-full bg-gray-700 dark:bg-gray-600 rounded-full h-1.5">
+                                <div 
+                                  className="bg-purple-400 h-1.5 rounded-full transition-all duration-300"
+                                  style={{width: `${stats.synced_items.sync_progress || 0}%`}}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          {/* Tooltip arrow */}
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
+                            <div className="border-8 border-transparent border-t-gray-900 dark:border-t-gray-700" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-white">
                     {formatNumber(stats?.synced_items?.total || 0)}
@@ -1208,23 +1236,99 @@ const Overview = () => {
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Service Status</h3>
               <div className="grid grid-cols-2 gap-4">
-                {health && health['components'] && Object.entries(health['components']).map(([name, status]) => (
-                  <div key={name} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 capitalize">
-                          {name.replace('_', ' ')}
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                          {status}
-                        </p>
-                      </div>
-                      <div className={`p-2 rounded-full ${getHealthColor(status)}`}>
-                        <Icon icon={getHealthIcon(status)} size="lg" />
-                      </div>
+                {/* Web Interface Status - always shown */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Web Interface
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
+                        {health ? 'Online' : 'Unknown'}
+                      </p>
+                    </div>
+                    <div className={`p-2 rounded-full ${health ? 'text-green-600 bg-green-100' : 'text-gray-600 bg-gray-100'}`}>
+                      <Icon icon={health ? 'circle-check' : 'server'} size="lg" />
                     </div>
                   </div>
-                ))}
+                </div>
+                
+                {/* Webhook Service Status - from system_health */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Webhook Service
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
+                        {stats?.system_health?.webhook_service === 'running' ? 'Running' : 
+                         stats?.system_health?.webhook_service === 'stopped' ? 'Stopped' :
+                         stats?.system_health?.webhook_service || 'Unknown'}
+                      </p>
+                    </div>
+                    <div className={`p-2 rounded-full ${
+                      stats?.system_health?.webhook_service === 'running' ? 'text-green-600 bg-green-100' :
+                      stats?.system_health?.webhook_service === 'stopped' ? 'text-red-600 bg-red-100' :
+                      'text-gray-600 bg-gray-100'
+                    }`}>
+                      <Icon icon={
+                        stats?.system_health?.webhook_service === 'running' ? 'circle-check' :
+                        stats?.system_health?.webhook_service === 'stopped' ? 'circle-xmark' :
+                        'server'
+                      } size="lg" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Database Status */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Database
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
+                        {stats?.system_health?.database === 'connected' ? 'Connected' :
+                         stats?.system_health?.database || 'Unknown'}
+                      </p>
+                    </div>
+                    <div className={`p-2 rounded-full ${
+                      stats?.system_health?.database === 'connected' ? 'text-green-600 bg-green-100' :
+                      'text-gray-600 bg-gray-100'
+                    }`}>
+                      <Icon icon={
+                        stats?.system_health?.database === 'connected' ? 'database' : 'server'
+                      } size="lg" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Jellyfin Connection */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Jellyfin Server
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
+                        {stats?.jellyfin_stats?.status === 'online' ? 'Online' :
+                         stats?.jellyfin_stats?.status === 'offline' ? 'Offline' :
+                         stats?.jellyfin_stats?.status || 'Unknown'}
+                      </p>
+                    </div>
+                    <div className={`p-2 rounded-full ${
+                      stats?.jellyfin_stats?.status === 'online' ? 'text-green-600 bg-green-100' :
+                      stats?.jellyfin_stats?.status === 'offline' ? 'text-red-600 bg-red-100' :
+                      'text-gray-600 bg-gray-100'
+                    }`}>
+                      <Icon icon={
+                        stats?.jellyfin_stats?.status === 'online' ? 'circle-check' :
+                        stats?.jellyfin_stats?.status === 'offline' ? 'circle-xmark' :
+                        'server'
+                      } size="lg" />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

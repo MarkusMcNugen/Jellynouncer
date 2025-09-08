@@ -144,7 +144,7 @@ const WebhookApiKeys = () => {
         } else {
           throw new Error('Copy command failed');
         }
-      } catch (err) {
+      } catch {
         // If copy still fails, show the key in a prompt for manual copying
         prompt('Failed to copy automatically. Please copy the API key manually:', text);
       } finally {
@@ -396,7 +396,7 @@ const WebhookApiKeys = () => {
             
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3 mb-4">
               <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium">
-                ⚠️ Important: Save this API key now - it won't be shown again!
+                ⚠️ Important: Save this API key now - it won&apos;t be shown again!
               </p>
             </div>
             

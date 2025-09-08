@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+ 
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { apiService } from '../services/api'
@@ -6,7 +6,7 @@ import Jinja2Editor from '../components/Jinja2Editor' // Used in JSX
 import { IconDuotone, IconLight } from '../components/FontAwesomeIcon' // Used in JSX
 import toast from 'react-hot-toast'
 import logger from '../services/logger'
-/* eslint-enable no-unused-vars */
+ 
 
 export default function Templates() {
   logger.info('[Templates] Component initialization started');
@@ -19,11 +19,8 @@ export default function Templates() {
   const [newTemplateName, setNewTemplateName] = useState('')
   const [activeTab, setActiveTab] = useState('basic')
   // Word wrapping is always enabled for better template editing experience
-  const lineWrapping = true
-  const [theme, setTheme] = useState(() => {
-    // Check if dark mode is enabled
-    return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-  })
+  // Theme detection moved to editor component
+  const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   
   logger.debug('[Templates] State hooks initialized', {
     initialStates: {
@@ -205,7 +202,7 @@ export default function Templates() {
       });
       loadTemplate(firstTemplate);
     }
-  }, [templates, selectedTemplate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [templates, selectedTemplate]);  
   
   // Log component mount/unmount
   useEffect(() => {
@@ -216,7 +213,7 @@ export default function Templates() {
         lastSelectedTemplate: selectedTemplate
       });
     };
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- Unmount effect only, captures final state
 
   return (
     <div className="h-full flex flex-col -mx-4 sm:-mx-6 lg:-mx-8">

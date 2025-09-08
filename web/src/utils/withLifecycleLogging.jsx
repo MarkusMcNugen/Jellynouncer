@@ -25,6 +25,7 @@ const withLifecycleLogging = (Component, componentName) => {
           pathname: window.location.pathname
         });
       };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Empty dependency array - only run on mount/unmount
 
     // Log any prop changes

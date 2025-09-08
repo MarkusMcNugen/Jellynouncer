@@ -258,6 +258,24 @@ class RecentNotification(BaseModel):
     timestamp: Optional[str] = None
 
 
+class SyncedItems(BaseModel):
+    """Model for synced items information"""
+    total: int = 0
+    by_type: Dict[str, int] = {}
+    database_size_mb: float = 0
+    last_sync_time: Optional[str] = None
+    sync_type: Optional[str] = None
+    recent_additions: int = 0
+    # Sync progress fields
+    is_syncing: bool = False
+    sync_progress: float = 0  # 0-100 percentage
+    items_processed: int = 0
+    items_total: int = 0
+    items_per_second: float = 0
+    eta_seconds: Optional[int] = None
+    sync_started_at: Optional[str] = None
+
+
 class HistoricalStats(BaseModel):
     """Model for historical statistics"""
     hourly: List[Dict[str, Any]] = []
@@ -276,6 +294,7 @@ class OverviewStats(BaseModel):
     system_health: SystemHealth = SystemHealth()
     jellyfin_stats: Optional[Dict[str, Any]] = None
     historical_stats: Optional[HistoricalStats] = None
+    synced_items: Optional[SyncedItems] = None  # Added missing field for database sync stats
 
 
 class ConfigUpdate(BaseModel):
@@ -798,14 +817,7 @@ class WebInterfaceService:
                 "disk_usage": 0
             },
             "jellyfin_stats": None,  # Will be populated from database
-            "synced_items": {
-                "total": 0,
-                "by_type": {},
-                "database_size_mb": 0,
-                "last_sync_time": None,
-                "sync_type": None,
-                "recent_additions": 0
-            },
+            "synced_items": SyncedItems(),  # Initialize with default SyncedItems model
             "webhook_stats": {
                 "received": 0,
                 "processed": 0,
@@ -1012,14 +1024,14 @@ class WebInterfaceService:
                     self.logger.debug(f"Database stats retrieved via webhook service: {db_stats.keys() if db_stats else 'None'}")
                 
                 # Store synced items information
-                stats["synced_items"] = {
-                    "total": db_stats.get("total_items", 0),
-                    "by_type": db_stats.get("item_counts", {}),
-                    "database_size_mb": db_stats.get("db_size_mb", 0),
-                    "last_sync_time": db_stats.get("last_sync_time"),
-                    "sync_type": db_stats.get("sync_type"),
-                    "recent_additions": db_stats.get("recent_additions", 0)
-                }
+                stats["synced_items"] = SyncedItems(
+                    total=db_stats.get("total_items", 0),
+                    by_type=db_stats.get("item_counts", {}),
+                    database_size_mb=db_stats.get("db_size_mb", 0),
+                    last_sync_time=db_stats.get("last_sync_time"),
+                    sync_type=db_stats.get("sync_type"),
+                    recent_additions=db_stats.get("recent_additions", 0)
+                )
                 
                 # Also update legacy fields for compatibility
                 stats["total_items"] = db_stats.get("total_items", 0)
@@ -1982,6 +1994,48 @@ async def get_notifications(
         raise HTTPException(status_code=500, detail=f"Failed to fetch notifications: {str(e)}")
 
 
+@app.get("/api/notifications/history")
+async def get_notifications_history(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    hours: int = Query(4, ge=1, le=24),
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Get notification history (alias endpoint for compatibility)"""
+    logger.debug(f"[API] Notifications history requested - page: {page}, limit: {limit}, hours: {hours}")
+    
+    try:
+        if web_service.web_db:
+            # Calculate offset for pagination
+            offset = (page - 1) * limit
+            
+            # Get total count (for pagination info)
+            all_notifications = await web_service.web_db.get_recent_notifications(limit=1000, hours=hours)
+            total_count = len(all_notifications)
+            
+            # Get paginated subset
+            paginated_notifications = all_notifications[offset:offset + limit]
+            
+            return {
+                "notifications": paginated_notifications,
+                "page": page,
+                "limit": limit,
+                "total": total_count,
+                "total_pages": (total_count + limit - 1) // limit  # Ceiling division
+            }
+        else:
+            return {
+                "notifications": [],
+                "page": 1,
+                "limit": limit,
+                "total": 0,
+                "total_pages": 0
+            }
+    except Exception as e:
+        logger.error(f"[API] Error fetching notification history: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch notification history: {str(e)}")
+
+
 @app.get("/api/overview", response_model=OverviewStats)
 async def get_overview(current_user: Optional[Dict] = Depends(check_auth_required)):
     """Get overview statistics"""
@@ -2362,6 +2416,27 @@ async def get_log_files(current_user: Optional[Dict] = Depends(check_auth_requir
         logger.error(f"Failed to list log files: {e}")
         return {"files": []}
 
+
+@app.get("/api/logs/recent")
+async def get_recent_logs(
+    limit: int = Query(100, description="Number of recent log entries to retrieve"),
+    level: Optional[str] = Query(None, description="Filter by log level (ERROR, WARNING, INFO, DEBUG)"),
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Get recent log entries without requiring a POST body"""
+    try:
+        # Create a LogQuery for recent logs
+        log_query = LogQuery(
+            log_file="jellynouncer-web.log",  # Default to web log
+            limit=limit,
+            level=level
+        )
+        logs = await web_service.get_logs(log_query)
+        return {"logs": logs, "count": len(logs)}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @app.post("/api/logs")
 async def get_logs(log_query: LogQuery, current_user: Optional[Dict] = Depends(check_auth_required)):

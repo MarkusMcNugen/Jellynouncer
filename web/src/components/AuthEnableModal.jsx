@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+// No hooks needed for this modal component
 
 const AuthEnableModal = ({ isOpen, onClose, onProceedToSetup }) => {
   if (!isOpen) return null;

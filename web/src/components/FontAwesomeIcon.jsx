@@ -1,4 +1,4 @@
-import React from 'react';
+// React import not needed in React 17+
 
 /**
  * Font Awesome Free Icon Component

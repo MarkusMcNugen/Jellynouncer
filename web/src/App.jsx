@@ -65,7 +65,7 @@ function App() {
       }
     }
     initAuth()
-  }, [checkAuth])
+  }, [checkAuth, authRequired, isAuthenticated])
 
   // Log successful app load
   useEffect(() => {

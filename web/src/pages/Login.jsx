@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Icon, IconDuotone, IconLight } from '../components/FontAwesomeIcon';
+import { IconDuotone, IconLight } from '../components/FontAwesomeIcon';
 import { useAuthStore } from '../stores/authStore';
 import logger from '../services/logger';
 

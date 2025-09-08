@@ -2882,7 +2882,7 @@ async def get_backup_status(current_user: Optional[Dict] = Depends(check_auth_re
             "statistics": stats,
             "estimated_size": estimated_size,
             "estimated_size_mb": round(estimated_size / (1024 * 1024), 2),
-            "next_backup": await web_service.backup_manager.get_next_backup_time() if web_service.backup_manager else None
+            "next_backup": stats.get("next_scheduled") if stats else None
         }
         
         logger.info(f"Returning backup status response: enabled={response['enabled']}, has_config={bool(response['config'])}")

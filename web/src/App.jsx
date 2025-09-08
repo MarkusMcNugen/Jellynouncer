@@ -1,19 +1,30 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
-import Layout from './components/Layout'
-import Login from './pages/Login'
-import Overview from './pages/Overview'
-import Config from './pages/Config'
-import Templates from './pages/Templates'
-import Backups from './pages/Backups'
-import Logs from './pages/Logs'
-import Notifications from './pages/Notifications'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import logger from './services/logger'
 import RouteLogger from './components/RouteLogger'
 import withLifecycleLogging from './utils/withLifecycleLogging'
 
-// Wrap page components with lifecycle logging
+// Keep Layout and Login as regular imports (needed immediately)
+import Layout from './components/Layout'
+import Login from './pages/Login'
+
+// Lazy load all other routes
+const Overview = lazy(() => import('./pages/Overview'))
+const Config = lazy(() => import('./pages/Config'))
+const Templates = lazy(() => import('./pages/Templates'))
+const Backups = lazy(() => import('./pages/Backups'))
+const Logs = lazy(() => import('./pages/Logs'))
+const Notifications = lazy(() => import('./pages/Notifications'))
+
+// Loading component
+const PageLoading = () => (
+  <div className="flex items-center justify-center min-h-[50vh]">
+    <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+  </div>
+)
+
+// Wrap lazy-loaded components with lifecycle logging
 const LoggedOverview = withLifecycleLogging(Overview, 'Overview');
 const LoggedConfig = withLifecycleLogging(Config, 'Config');
 const LoggedTemplates = withLifecycleLogging(Templates, 'Templates');
@@ -143,12 +154,36 @@ function App() {
       <RouteLogger />
       <Routes>
         <Route path="/" element={<LoggedLayout />}>
-          <Route index element={<LoggedOverview />} />
-          <Route path="config" element={<LoggedConfig />} />
-          <Route path="templates" element={<LoggedTemplates />} />
-          <Route path="backups" element={<LoggedBackups />} />
-          <Route path="logs" element={<LoggedLogs />} />
-          <Route path="notifications" element={<LoggedNotifications />} />
+          <Route index element={
+            <Suspense fallback={<PageLoading />}>
+              <LoggedOverview />
+            </Suspense>
+          } />
+          <Route path="config" element={
+            <Suspense fallback={<PageLoading />}>
+              <LoggedConfig />
+            </Suspense>
+          } />
+          <Route path="templates" element={
+            <Suspense fallback={<PageLoading />}>
+              <LoggedTemplates />
+            </Suspense>
+          } />
+          <Route path="backups" element={
+            <Suspense fallback={<PageLoading />}>
+              <LoggedBackups />
+            </Suspense>
+          } />
+          <Route path="logs" element={
+            <Suspense fallback={<PageLoading />}>
+              <LoggedLogs />
+            </Suspense>
+          } />
+          <Route path="notifications" element={
+            <Suspense fallback={<PageLoading />}>
+              <LoggedNotifications />
+            </Suspense>
+          } />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

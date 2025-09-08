@@ -907,6 +907,30 @@ const Config = () => {
                     onChange={(e) => handleInputChange('server', 'host', e.target.value)}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
                   />
+                  {config.server.host === '0.0.0.0' && (
+                    <div className="mt-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                            Security Notice
+                          </h3>
+                          <div className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
+                            <p>Setting host to "0.0.0.0" makes the webhook service accessible from all network interfaces.</p>
+                            <ul className="list-disc list-inside mt-1">
+                              <li>For local-only access, use "127.0.0.1"</li>
+                              <li>Ensure proper firewall configuration when using "0.0.0.0"</li>
+                              <li>Docker containers typically require "0.0.0.0" for external access</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <LabelWithTooltip 
@@ -1158,6 +1182,30 @@ const Config = () => {
                     onChange={(e) => handleInputChange('web_interface', 'host', e.target.value)}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
                   />
+                  {config.web_interface.host === '0.0.0.0' && (
+                    <div className="mt-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                            Security Notice
+                          </h3>
+                          <div className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
+                            <p>Setting host to "0.0.0.0" makes the service accessible from all network interfaces.</p>
+                            <ul className="list-disc list-inside mt-1">
+                              <li>For local-only access, use "127.0.0.1"</li>
+                              <li>Ensure proper firewall configuration when using "0.0.0.0"</li>
+                              <li>Docker containers typically require "0.0.0.0" for external access</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

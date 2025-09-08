@@ -1220,7 +1220,7 @@ class WebInterfaceService:
         try:
             # Validate Jinja2 syntax
             from jinja2 import Environment, TemplateSyntaxError
-            env = Environment()
+            env = Environment(autoescape=True)  # Enable autoescape for security
             try:
                 env.parse(content)
             except TemplateSyntaxError as e:

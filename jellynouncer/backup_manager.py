@@ -333,13 +333,35 @@ class BackupManager:
         }
         
         try:
-            # Extract archive
+            # Extract archive safely
             if backup_file.suffix == ".gz":
                 with tarfile.open(backup_file, "r:gz") as tar:
-                    tar.extractall(temp_dir)
+                    # Safely extract each member after validation
+                    for member in tar.getmembers():
+                        # Check for path traversal attempts
+                        if os.path.isabs(member.name) or ".." in member.name:
+                            logger.warning(f"Skipping potentially unsafe tar member: {member.name}")
+                            continue
+                        # Ensure the extraction path is within temp_dir
+                        member_path = temp_dir / member.name
+                        if not str(member_path.resolve()).startswith(str(temp_dir.resolve())):
+                            logger.warning(f"Skipping tar member outside destination: {member.name}")
+                            continue
+                        tar.extract(member, temp_dir)
             elif backup_file.suffix == ".tar":
                 with tarfile.open(backup_file, "r") as tar:
-                    tar.extractall(temp_dir)
+                    # Safely extract each member after validation
+                    for member in tar.getmembers():
+                        # Check for path traversal attempts
+                        if os.path.isabs(member.name) or ".." in member.name:
+                            logger.warning(f"Skipping potentially unsafe tar member: {member.name}")
+                            continue
+                        # Ensure the extraction path is within temp_dir
+                        member_path = temp_dir / member.name
+                        if not str(member_path.resolve()).startswith(str(temp_dir.resolve())):
+                            logger.warning(f"Skipping tar member outside destination: {member.name}")
+                            continue
+                        tar.extract(member, temp_dir)
             else:
                 # Assume it's a directory
                 shutil.copytree(backup_file, temp_dir / backup_file.name)

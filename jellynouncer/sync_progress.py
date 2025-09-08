@@ -20,6 +20,7 @@ import os
 import sys
 import time
 import locale
+from typing import List, Optional, Dict, Any
 from colorama import init, Fore
 
 # Initialize colorama for Windows support
@@ -124,7 +125,7 @@ class SyncProgressDisplay:
         
         # ETA estimation with progressive refinement
         self.initial_estimate_per_item = self._get_initial_time_estimate()
-        self.batch_times = []  # Track last N batch times for moving average
+        self.batch_times: List[float] = []  # Track last N batch times for moving average
         self.max_batch_history = 10  # Keep last 10 batches for average
         
         # Detect terminal capabilities
@@ -449,7 +450,7 @@ class SyncProgressDisplay:
             # Huge library: ~0.02 seconds per item (50 items/sec)
             return 0.02
     
-    def _calculate_adaptive_eta(self, current_items: int, batch_time: float = None) -> float:
+    def _calculate_adaptive_eta(self, current_items: int, batch_time: Optional[float] = None) -> float:
         """
         Calculate ETA with progressive refinement.
         
@@ -723,7 +724,7 @@ class SyncProgressDisplay:
     def log_batch_progress(self, batch_num: int, items_in_batch: int, 
                           total_fetched: int, items_processed: int,
                           errors: int = 0, new_items: int = 0, 
-                          updated_items: int = 0, batch_time: float = None):
+                          updated_items: int = 0, batch_time: Optional[float] = None):
         """
         Log progress for each batch with colors and formatting.
         

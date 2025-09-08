@@ -527,6 +527,7 @@ class DiscordNotifier:
             # Configure environment with caching for 8x performance improvement
             self.jinja_env = Environment(
                 loader=FileSystemLoader(self.template_dir),
+                autoescape=True,  # Enable autoescape to prevent XSS vulnerabilities
                 trim_blocks=True,
                 lstrip_blocks=True,
                 cache_size=400,  # Cache up to 400 compiled templates in memory

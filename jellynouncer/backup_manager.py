@@ -527,7 +527,9 @@ class BackupManager:
             
             # Calculate next scheduled backup
             next_backup = None
-            if self.enabled and self.schedule != "manual":
+            enabled = self.config.get("enabled", False)
+            schedule = self.config.get("schedule", "daily")
+            if enabled and schedule != "manual":
                 next_backup = self._calculate_next_backup().isoformat()
             
             return {
@@ -543,14 +545,14 @@ class BackupManager:
                 "retention_days": self.retention_days,
                 "max_backups": self.max_backups,
                 "backup_directory": str(self.backup_dir),
-                "schedule": self.schedule,
-                "enabled": self.enabled
+                "schedule": schedule,
+                "enabled": enabled
             }
         except Exception as e:
-            self.logger.error(f"Failed to get backup statistics: {e}")
+            logger.error(f"Failed to get backup statistics: {e}")
             return {
                 "error": str(e),
-                "enabled": self.enabled,
+                "enabled": self.config.get("enabled", False),
                 "backup_directory": str(self.backup_dir)
             }
     

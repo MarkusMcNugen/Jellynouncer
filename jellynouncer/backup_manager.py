@@ -514,6 +514,46 @@ class BackupManager:
         
         return backups
     
+    async def get_statistics(self) -> Dict[str, Any]:
+        """Get backup system statistics"""
+        try:
+            backups = await self.list_backups()
+            
+            # Calculate total size
+            total_size = sum(b.get("size", 0) for b in backups)
+            
+            # Get latest backup info
+            latest_backup = backups[0] if backups else None
+            
+            # Calculate next scheduled backup
+            next_backup = None
+            if self.enabled and self.schedule != "manual":
+                next_backup = self._calculate_next_backup().isoformat()
+            
+            return {
+                "total_backups": len(backups),
+                "total_size": total_size,
+                "latest_backup": {
+                    "filename": latest_backup.get("filename"),
+                    "created": latest_backup.get("created"),
+                    "size": latest_backup.get("size"),
+                    "type": latest_backup.get("type")
+                } if latest_backup else None,
+                "next_scheduled": next_backup,
+                "retention_days": self.retention_days,
+                "max_backups": self.max_backups,
+                "backup_directory": str(self.backup_dir),
+                "schedule": self.schedule,
+                "enabled": self.enabled
+            }
+        except Exception as e:
+            self.logger.error(f"Failed to get backup statistics: {e}")
+            return {
+                "error": str(e),
+                "enabled": self.enabled,
+                "backup_directory": str(self.backup_dir)
+            }
+    
     async def cleanup_old_backups(self):
         """Remove old backups based on retention policy"""
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.retention_days)

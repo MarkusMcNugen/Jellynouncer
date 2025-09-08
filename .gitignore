@@ -6,7 +6,7 @@ CLAUDE.md
 /.claude/settings.local.json
 /__pycache__
 /.claude
-*.pyc
+*.py
 
 # Python cache in module directory
 jellynouncer/__pycache__/
@@ -107,3 +107,25 @@ node_modules/
 /web/web/overview-page.png
 /web/test-database-sync.mjs
 /web/test-interface.mjs
+/test-notifications.mjs
+/test-overview.mjs
+/test_stats.py
+/test_webdb_method.py
+/web/test-all-icons.mjs
+/web/test-fixed-icons.mjs
+/web/test-icon-styles.mjs
+/web/test-icon-visual.mjs
+/web/test-logs-icons.mjs
+/web/logs-search-area.png
+/web/logs-page-icons.png
+/web/logs-icons-test.png
+/web/logs-empty-state.png
+/web/logs-fixed-icons.png
+/web/icon-styles-check.png
+/web/icon-test-error.png
+/web/debug-toolkit.mjs
+/web/debug-toolkit-enhanced.mjs
+/web/web/overview-page-sync.png
+/web/sync-progress-demo.jsx
+/web/test-backups.mjs
+/web/test-overview-sync.mjs

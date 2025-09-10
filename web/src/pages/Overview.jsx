@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
+import NotificationItem from '../components/NotificationItem';
+import NotificationModal from '../components/NotificationModal';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -41,6 +43,8 @@ const Overview = () => {
   const [health, setHealth] = useState(null);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
   
   logger.debug('[Overview] State hooks initialized', {
     initialStates: {
@@ -1054,6 +1058,16 @@ const Overview = () => {
               {recentNotifications.length > 0 ? (
                 <div className="space-y-4">
                   {recentNotifications.slice(0, 10).map((notification, index) => (
+                    <NotificationItem
+                      key={notification.id || index}
+                      notification={notification}
+                      onClick={() => {
+                        setSelectedNotification(notification);
+                        setModalOpen(true);
+                      }}
+                    />
+                  ))}
+                  {false && recentNotifications.slice(0, 10).map((notification, index) => (
                     <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -1431,6 +1445,16 @@ const Overview = () => {
         </div>
 
       </div>
+      
+      {/* Notification Detail Modal */}
+      <NotificationModal
+        notification={selectedNotification}
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedNotification(null);
+        }}
+      />
     </div>
   );
 };

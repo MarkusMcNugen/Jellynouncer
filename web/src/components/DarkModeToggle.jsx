@@ -19,7 +19,7 @@ const DarkModeToggle = () => {
     // Apply theme to document
     const root = document.documentElement;
     
-    if (theme === 'dark') {
+    if (theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
@@ -31,8 +31,10 @@ const DarkModeToggle = () => {
 
   const toggleTheme = () => {
     setTheme(prevTheme => {
-      const themes = ['light', 'dark', 'auto'];
-      const currentIndex = themes.indexOf(prevTheme);
+      // Only toggle between light and dark for explicit control
+      // Remove 'auto' to prevent browser preference override
+      const themes = ['light', 'dark'];
+      const currentIndex = themes.indexOf(prevTheme === 'auto' ? 'light' : prevTheme);
       const nextIndex = (currentIndex + 1) % themes.length;
       return themes[nextIndex];
     });

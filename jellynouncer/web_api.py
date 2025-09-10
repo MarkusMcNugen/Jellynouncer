@@ -2207,6 +2207,139 @@ async def update_full_config(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@app.get("/api/jellyfin/item/{item_id}")
+async def get_jellyfin_item_metadata(
+    item_id: str,
+    current_user: Optional[Dict] = Depends(check_auth_required)
+):
+    """Fetch real-time metadata for a Jellyfin item"""
+    try:
+        # Use the existing Jellyfin client
+        if web_service.jellyfin:
+            logger.debug(f"Fetching metadata for item {item_id}")
+            
+            # Get full item details from Jellyfin
+            try:
+                item_data = web_service.jellyfin.client.jellyfin.get_item(item_id)
+                
+                if not item_data:
+                    raise HTTPException(status_code=404, detail="Item not found in Jellyfin")
+                
+                # Get additional metadata based on item type
+                item_type = item_data.get('Type', '').lower()
+                
+                # Build response with relevant metadata
+                metadata = {
+                    "id": item_data.get("Id"),
+                    "name": item_data.get("Name"),
+                    "type": item_type,
+                    "overview": item_data.get("Overview"),
+                    "year": item_data.get("ProductionYear"),
+                    "genres": item_data.get("Genres", []),
+                    "studios": item_data.get("Studios", []),
+                    "taglines": item_data.get("Taglines", []),
+                    "community_rating": item_data.get("CommunityRating"),
+                    "official_rating": item_data.get("OfficialRating"),
+                    "runtime_ticks": item_data.get("RunTimeTicks"),
+                    "premiere_date": item_data.get("PremiereDate"),
+                    "end_date": item_data.get("EndDate"),
+                    "status": item_data.get("Status"),
+                    "image_tags": item_data.get("ImageTags", {}),
+                    "backdrop_image_tags": item_data.get("BackdropImageTags", []),
+                    "provider_ids": item_data.get("ProviderIds", {}),
+                    "people": item_data.get("People", [])[:10],  # Limit cast/crew to 10
+                    "media_streams": item_data.get("MediaStreams", []),
+                    "path": item_data.get("Path"),
+                    "container": item_data.get("Container"),
+                    "video_codec": None,
+                    "audio_codec": None,
+                    "resolution": None,
+                    "aspect_ratio": item_data.get("AspectRatio"),
+                }
+                
+                # Extract video/audio codec info from media streams
+                for stream in metadata.get("media_streams", []):
+                    if stream.get("Type") == "Video" and not metadata["video_codec"]:
+                        metadata["video_codec"] = stream.get("Codec")
+                        metadata["resolution"] = f"{stream.get('Width', 0)}x{stream.get('Height', 0)}"
+                        if stream.get("IsHdr"):
+                            metadata["hdr"] = True
+                    elif stream.get("Type") == "Audio" and not metadata["audio_codec"]:
+                        metadata["audio_codec"] = stream.get("Codec")
+                        metadata["audio_channels"] = stream.get("Channels")
+                        metadata["audio_language"] = stream.get("Language")
+                
+                # Type-specific metadata
+                if item_type == "episode":
+                    metadata.update({
+                        "series_name": item_data.get("SeriesName"),
+                        "season_number": item_data.get("ParentIndexNumber"),
+                        "episode_number": item_data.get("IndexNumber"),
+                        "series_id": item_data.get("SeriesId"),
+                        "season_id": item_data.get("SeasonId"),
+                        "absolute_episode_number": item_data.get("AbsoluteEpisodeNumber"),
+                    })
+                elif item_type == "season":
+                    metadata.update({
+                        "series_name": item_data.get("SeriesName"),
+                        "season_number": item_data.get("IndexNumber"),
+                        "series_id": item_data.get("SeriesId"),
+                        "episode_count": item_data.get("ChildCount"),
+                    })
+                elif item_type == "series":
+                    metadata.update({
+                        "season_count": item_data.get("ChildCount"),
+                        "episode_count": item_data.get("RecursiveItemCount"),
+                        "status": item_data.get("Status"),
+                        "air_days": item_data.get("AirDays", []),
+                        "air_time": item_data.get("AirTime"),
+                    })
+                elif item_type == "movie":
+                    metadata.update({
+                        "tagline": item_data.get("Tagline"),
+                        "original_title": item_data.get("OriginalTitle"),
+                        "sort_name": item_data.get("SortName"),
+                    })
+                elif item_type == "audio":
+                    metadata.update({
+                        "album": item_data.get("Album"),
+                        "album_artist": item_data.get("AlbumArtist"),
+                        "artists": item_data.get("Artists", []),
+                        "track_number": item_data.get("IndexNumber"),
+                        "disc_number": item_data.get("ParentIndexNumber"),
+                    })
+                elif item_type == "musicalbum":
+                    metadata.update({
+                        "album_artist": item_data.get("AlbumArtist"),
+                        "artists": item_data.get("Artists", []),
+                        "track_count": item_data.get("ChildCount"),
+                    })
+                
+                # Generate thumbnail URL if available
+                if metadata.get("image_tags", {}).get("Primary"):
+                    base_url = web_service.jellyfin.config.server_url.rstrip('/')
+                    metadata["thumbnail_url"] = f"{base_url}/Items/{item_id}/Images/Primary"
+                
+                # Generate backdrop URL if available
+                if metadata.get("backdrop_image_tags"):
+                    base_url = web_service.jellyfin.config.server_url.rstrip('/')
+                    metadata["backdrop_url"] = f"{base_url}/Items/{item_id}/Images/Backdrop/0"
+                
+                return metadata
+                
+            except Exception as api_error:
+                logger.error(f"Failed to fetch item from Jellyfin API: {api_error}")
+                raise HTTPException(status_code=404, detail=f"Could not fetch item: {str(api_error)}")
+        else:
+            raise HTTPException(status_code=503, detail="Jellyfin client not available")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching Jellyfin item metadata: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/test/jellyfin")
 async def test_jellyfin_connection(
     config: Dict[str, Any],

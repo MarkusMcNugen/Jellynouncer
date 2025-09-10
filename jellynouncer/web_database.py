@@ -322,9 +322,10 @@ class WebDatabaseManager:
                 LIMIT 24
             """, (cutoff_str,))
             
-            hourly_data = []
+            # Create a dictionary of existing data
+            existing_data = {}
             for row in cursor.fetchall():
-                hourly_data.append({
+                existing_data[row["hour_bucket"]] = {
                     "hour": row["hour_bucket"],
                     "webhooks_received": row["webhooks_received"] or 0,
                     "webhooks_processed": row["webhooks_processed"] or 0,
@@ -348,7 +349,44 @@ class WebDatabaseManager:
                     "sent_tv": row["sent_tv"] or 0,
                     "sent_music": row["sent_music"] or 0,
                     "library_scans": row["library_scans"] or 0
-                })
+                }
+            
+            # Create all 24 hour buckets with zero values for missing hours
+            hourly_data = []
+            current_time = datetime.now()
+            for i in range(24):
+                hour_time = current_time - timedelta(hours=i)
+                hour_bucket = hour_time.strftime('%Y-%m-%d %H:00')
+                
+                if hour_bucket in existing_data:
+                    hourly_data.append(existing_data[hour_bucket])
+                else:
+                    # Add empty hour with all zeros
+                    hourly_data.append({
+                        "hour": hour_bucket,
+                        "webhooks_received": 0,
+                        "webhooks_processed": 0,
+                        "webhooks_failed": 0,
+                        "sent": 0,
+                        "failed": 0,
+                        "queued": 0,
+                        "new": 0,
+                        "upgraded": 0,
+                        "deleted": 0,
+                        "metadata_only": 0,
+                        "renames_filtered": 0,
+                        "deletes_filtered": 0,
+                        "mass_renames": 0,
+                        "movies": 0,
+                        "tv_shows": 0,
+                        "episodes": 0,
+                        "music": 0,
+                        "sent_default": 0,
+                        "sent_movies": 0,
+                        "sent_tv": 0,
+                        "sent_music": 0,
+                        "library_scans": 0
+                    })
             
             # Get totals for the period
             cursor = conn.execute("""
@@ -858,6 +896,69 @@ class WebDatabaseManager:
                 notifications.append(notification)
         
         return notifications
+    
+    async def add_notification_to_history(self, 
+                                         item_id: str,
+                                         item_name: str,
+                                         item_type: str,
+                                         event_type: str,
+                                         discord_webhook: str = None,
+                                         status: str = 'pending',
+                                         error_message: str = None,
+                                         processing_time_ms: int = None,
+                                         metadata: dict = None):
+        """
+        Add a notification to the history table for tracking and display.
+        
+        Args:
+            item_id: Jellyfin item ID
+            item_name: Name of the item
+            item_type: Type of media (Movie, Episode, etc.)
+            event_type: Type of event (new, upgraded, deleted)
+            discord_webhook: Webhook URL used (optional)
+            status: Status of notification (pending, sent, failed)
+            error_message: Error message if failed
+            processing_time_ms: Processing time in milliseconds
+            metadata: Additional metadata as dict
+        """
+        import json
+        from datetime import datetime
+        
+        if not self.initialized:
+            await self.initialize()
+        
+        metadata_json = json.dumps(metadata) if metadata else None
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT INTO notification_history 
+                (item_id, item_name, item_type, event_type, discord_webhook, 
+                 status, error_message, processing_time_ms, metadata, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (item_id, item_name, item_type, event_type, discord_webhook,
+                  status, error_message, processing_time_ms, metadata_json, datetime.now()))
+            
+            conn.commit()
+        
+        logger.debug(f"Added notification to history: {item_name} ({event_type}) - Status: {status}")
+    
+    async def update_notification_status(self, item_id: str, status: str, error_message: str = None):
+        """Update the status of a notification in history"""
+        from datetime import datetime
+        
+        if not self.initialized:
+            await self.initialize()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                UPDATE notification_history
+                SET status = ?, error_message = ?, sent_at = ?
+                WHERE item_id = ? AND sent_at IS NULL
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (status, error_message, datetime.now() if status == 'sent' else None, item_id))
+            
+            conn.commit()
     
     async def cleanup_old_notifications(self, days: int = 7):
         """Remove notification history older than specified days"""

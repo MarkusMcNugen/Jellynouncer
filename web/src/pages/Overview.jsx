@@ -209,6 +209,20 @@ const Overview = () => {
 
   // Process historical stats for line chart
   const historicalData = stats?.historical_stats?.hourly || [];
+  
+  // Debug logging for chart data
+  useEffect(() => {
+    if (stats?.historical_stats) {
+      logger.debug('[Overview] Chart data preparation', {
+        historicalDataLength: historicalData.length,
+        hasStats: !!stats,
+        hasHistoricalStats: !!stats?.historical_stats,
+        hourlyData: historicalData.slice(0, 3),
+        totals: stats?.historical_stats?.totals
+      });
+    }
+  }, [stats, historicalData]);
+  
   const lineChartData = {
     labels: historicalData.map(h => {
       const date = new Date(h.hour);
@@ -810,7 +824,13 @@ const Overview = () => {
               Activity Over Time (24 Hours)
             </h3>
             <div className="h-64">
-              <Line data={lineChartData} options={chartOptions} />
+              {historicalData.length > 0 ? (
+                <Line data={lineChartData} options={chartOptions} />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <span>No activity data available for the last 24 hours</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -830,7 +850,13 @@ const Overview = () => {
                 Content Types
               </h3>
               <div className="h-64">
-                <Doughnut data={contentTypeChartData} options={Object.assign({}, chartOptions, { aspectRatio: 1 })} />
+                {(contentStats.total_movies || contentStats.total_tv_shows || contentStats.total_episodes || contentStats.total_music) ? (
+                  <Doughnut data={contentTypeChartData} options={Object.assign({}, chartOptions, { aspectRatio: 1 })} />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <span>No content data available</span>
+                  </div>
+                )}
               </div>
             </div>
 

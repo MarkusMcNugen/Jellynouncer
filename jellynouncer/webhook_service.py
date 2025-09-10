@@ -576,7 +576,7 @@ class WebhookService:
                     
                     # Record notification in history
                     if self.web_db:
-                        await self.web_db.add_notification_history(
+                        await self.web_db.add_notification_to_history(
                             item_id=media_item.item_id,
                             item_name=media_item.name,
                             item_type=media_item.item_type,
@@ -652,7 +652,7 @@ class WebhookService:
                 
                 # Record notification in history
                 if self.web_db:
-                    await self.web_db.add_notification_history(
+                    await self.web_db.add_notification_to_history(
                         item_id=media_item.item_id,
                         item_name=media_item.name,
                         item_type=media_item.item_type,
@@ -2084,6 +2084,20 @@ class WebhookService:
                 
                 notification_result = await self.discord.send_notification(enriched_item, "upgraded_item", changes, metadata=metadata)
                 
+                # Record notification in history
+                if self.web_db:
+                    await self.web_db.add_notification_to_history(
+                        item_id=media_item.item_id,
+                        item_name=media_item.name,
+                        item_type=media_item.item_type,
+                        event_type="upgraded",
+                        status="sent" if notification_result.get("success") else "failed",
+                        discord_webhook=notification_result.get("webhook_url"),
+                        error_message=notification_result.get("error") if not notification_result.get("success") else None,
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                        metadata={"changes": changes} if changes else None
+                    )
+                
                 # Record stats
                 await self._record_notification_stats("upgraded", media_item.item_type, notification_result.get("success", False))
                 
@@ -2118,6 +2132,19 @@ class WebhookService:
                     self.logger.error(f"Error enriching item with metadata: {e}")
             
             notification_result = await self.discord.send_notification(media_item, "new_item", metadata=metadata)
+            
+            # Record notification in history
+            if self.web_db:
+                await self.web_db.add_notification_to_history(
+                    item_id=media_item.item_id,
+                    item_name=media_item.name,
+                    item_type=media_item.item_type,
+                    event_type="new",
+                    status="sent" if notification_result.get("success") else "failed",
+                    discord_webhook=notification_result.get("webhook_url"),
+                    error_message=notification_result.get("error") if not notification_result.get("success") else None,
+                    processing_time_ms=int((time.time() - start_time) * 1000)
+                )
             
             # Record stats
             await self._record_notification_stats("new", media_item.item_type, notification_result.get("success", False))
@@ -2170,7 +2197,7 @@ class WebhookService:
             
             # Record notification in history
             if self.web_db:
-                await self.web_db.add_notification_history(
+                await self.web_db.add_notification_to_history(
                     item_id=payload.ItemId,
                     item_name=payload.Name,
                     item_type=payload.ItemType,

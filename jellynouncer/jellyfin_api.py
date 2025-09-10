@@ -530,6 +530,7 @@ class JellyfinAPI:
                 total_items = 0
                 movie_count = 0
                 series_count = 0
+                season_count = 0
                 episode_count = 0
                 music_count = 0
                 music_album_count = 0
@@ -566,14 +567,18 @@ class JellyfinAPI:
                             if lib_type == 'movies':
                                 movie_count += item_count
                             elif lib_type == 'tvshows':
-                                # Get series and episode counts separately
+                                # Get series, season, and episode counts separately
                                 series_items = self.client.jellyfin.user_items(
                                     params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Series'}
+                                )
+                                season_items = self.client.jellyfin.user_items(
+                                    params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Season'}
                                 )
                                 episode_items = self.client.jellyfin.user_items(
                                     params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Episode'}
                                 )
                                 series_count += series_items.get('TotalRecordCount', 0) if series_items else 0
+                                season_count += season_items.get('TotalRecordCount', 0) if season_items else 0
                                 episode_count += episode_items.get('TotalRecordCount', 0) if episode_items else 0
                             elif lib_type == 'music':
                                 music_count += item_count
@@ -592,6 +597,7 @@ class JellyfinAPI:
                 stats['total_items'] = total_items
                 stats['movie_count'] = movie_count
                 stats['series_count'] = series_count
+                stats['season_count'] = season_count
                 stats['episode_count'] = episode_count
                 stats['music_count'] = music_count
                 stats['music_album_count'] = music_album_count

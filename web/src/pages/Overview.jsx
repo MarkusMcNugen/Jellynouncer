@@ -500,18 +500,26 @@ const Overview = () => {
                   <p className="text-3xl font-bold text-gray-900 dark:text-white">
                     {formatNumber(stats?.jellyfin_stats?.total_items || 0)}
                   </p>
-                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
                     <div className="flex justify-between">
                       <span><Icon icon="film" className="mr-1" size="xs" />Movies</span>
-                      <span className="font-medium">{stats?.jellyfin_stats?.movie_count || 0}</span>
+                      <span className="font-medium">{formatNumber(stats?.jellyfin_stats?.movie_count || 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span><Icon icon="tv" className="mr-1" size="xs" />Series</span>
+                      <span className="font-medium">{formatNumber(stats?.jellyfin_stats?.series_count || 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span><Icon icon="list-ol" className="mr-1" size="xs" />Seasons</span>
+                      <span className="font-medium">{formatNumber(stats?.jellyfin_stats?.season_count || 0)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span><Icon icon="video" className="mr-1" size="xs" />Episodes</span>
-                      <span className="font-medium">{stats?.jellyfin_stats?.episode_count || 0}</span>
+                      <span className="font-medium">{formatNumber(stats?.jellyfin_stats?.episode_count || 0)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span><Icon icon="music" className="mr-1" size="xs" />Music</span>
-                      <span className="font-medium">{stats?.jellyfin_stats?.music_count || 0}</span>
+                      <span className="font-medium">{formatNumber(stats?.jellyfin_stats?.music_count || 0)}</span>
                     </div>
                   </div>
                 </div>

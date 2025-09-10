@@ -402,7 +402,7 @@ class DatabaseManager:
             self.logger.error(f"Database initialization failed: {e}")
             raise
 
-    async def save_item(self, item: DatabaseItem) -> bool:
+    async def save_item(self, item: DatabaseItem, update_timestamp: bool = True) -> bool:
         """
         Save or update a media item in the database.
 
@@ -418,6 +418,7 @@ class DatabaseManager:
 
         Args:
             item (DatabaseItem): Database item to save or update
+            update_timestamp (bool): Whether to update timestamp_created (True for webhooks, False for syncs)
 
         Returns:
             bool: True if save was successful, False otherwise
@@ -461,6 +462,25 @@ class DatabaseManager:
                     if field in item_dict and item_dict[field] is not None:
                         item_dict[field] = json.dumps(item_dict[field])
 
+                # Handle timestamp based on update_timestamp parameter
+                if update_timestamp:
+                    # For webhooks: always update timestamp to reflect the change
+                    item_dict['timestamp_created'] = datetime.now(timezone.utc).isoformat()
+                else:
+                    # For syncs: preserve existing timestamp if item exists
+                    cursor = await db.execute(
+                        "SELECT timestamp_created FROM media_items WHERE item_id = ?",
+                        (item.item_id,)
+                    )
+                    existing = await cursor.fetchone()
+                    
+                    if existing:
+                        # Preserve the original timestamp for existing items
+                        item_dict['timestamp_created'] = existing['timestamp_created']
+                    elif not item_dict.get('timestamp_created'):
+                        # Only set new timestamp for truly new items
+                        item_dict['timestamp_created'] = datetime.now(timezone.utc).isoformat()
+                
                 # Insert or replace the item (UPSERT operation)
                 placeholders = ', '.join(['?' for _ in item_dict])
                 columns = ', '.join(item_dict.keys())
@@ -547,7 +567,7 @@ class DatabaseManager:
             self.logger.error(f"Failed to retrieve item {item_id}: {e}")
             return None
 
-    async def save_items_batch(self, items: List[DatabaseItem]) -> Dict[str, int]:
+    async def save_items_batch(self, items: List[DatabaseItem], update_timestamp: bool = False) -> Dict[str, int]:
         """
         Save multiple media items in a single transaction for better performance.
 
@@ -563,6 +583,7 @@ class DatabaseManager:
 
         Args:
             items (List[DatabaseItem]): List of database items to save
+            update_timestamp (bool): Whether to update timestamp_created (default False for syncs)
 
         Returns:
             Dict[str, int]: Statistics about the batch operation
@@ -601,15 +622,16 @@ class DatabaseManager:
                 # Begin transaction for all items with immediate lock
                 await db.execute("BEGIN IMMEDIATE")
                 
-                # First, check which items already exist in the database
+                # First, check which items already exist and get their timestamps
                 # This is done efficiently in one query for the entire batch
                 item_ids = [item.item_id for item in items]
                 placeholders = ','.join('?' * len(item_ids))
                 cursor = await db.execute(
-                    f"SELECT item_id FROM media_items WHERE item_id IN ({placeholders})",
+                    f"SELECT item_id, timestamp_created FROM media_items WHERE item_id IN ({placeholders})",
                     item_ids
                 )
-                existing_ids = {row[0] for row in await cursor.fetchall()}
+                existing_items = {row[0]: row[1] for row in await cursor.fetchall()}
+                existing_ids = set(existing_items.keys())
 
                 # Process items in chunks matching API batch size for consistency
                 # Uses same adaptive sizing as API calls for optimal performance
@@ -640,6 +662,18 @@ class DatabaseManager:
                                     del item_dict['_content_hash']
                                     # Add the actual content hash from the property
                                     item_dict['content_hash'] = item.content_hash
+                                
+                                # Handle timestamp based on update_timestamp parameter
+                                if update_timestamp:
+                                    # Update timestamp to current time
+                                    item_dict['timestamp_created'] = datetime.now(timezone.utc).isoformat()
+                                else:
+                                    # Preserve timestamp for existing items (sync mode)
+                                    if item.item_id in existing_items:
+                                        item_dict['timestamp_created'] = existing_items[item.item_id]
+                                    elif not item_dict.get('timestamp_created'):
+                                        # Only set new timestamp for truly new items
+                                        item_dict['timestamp_created'] = datetime.now(timezone.utc).isoformat()
                                 
                                 # Optimize JSON serialization with set lookup
                                 json_fields = {'genres', 'studios', 'tags', 'artists', 'subtitle_languages', 'subtitle_formats'}
@@ -683,6 +717,24 @@ class DatabaseManager:
                                     updated_items += 1
                                 
                                 item_dict = asdict(item)
+                                
+                                # Remove private fields
+                                if '_content_hash' in item_dict:
+                                    del item_dict['_content_hash']
+                                    item_dict['content_hash'] = item.content_hash
+                                
+                                # Handle timestamp based on update_timestamp parameter
+                                if update_timestamp:
+                                    # Update timestamp to current time
+                                    item_dict['timestamp_created'] = datetime.now(timezone.utc).isoformat()
+                                else:
+                                    # Preserve timestamp for existing items (sync mode)
+                                    if item.item_id in existing_items:
+                                        item_dict['timestamp_created'] = existing_items[item.item_id]
+                                    elif not item_dict.get('timestamp_created'):
+                                        # Only set new timestamp for truly new items
+                                        item_dict['timestamp_created'] = datetime.now(timezone.utc).isoformat()
+                                
                                 json_fields = {'genres', 'studios', 'tags', 'artists', 'subtitle_languages', 'subtitle_formats'}
                                 for field in json_fields:
                                     if field in item_dict and item_dict[field] is not None:

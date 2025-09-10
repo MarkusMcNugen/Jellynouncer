@@ -2220,7 +2220,7 @@ async def get_jellyfin_item_metadata(
             
             # Get full item details from Jellyfin
             try:
-                item_data = web_service.jellyfin.client.jellyfin.get_item(item_id)
+                item_data = await web_service.jellyfin.get_item(item_id)
                 
                 if not item_data:
                     raise HTTPException(status_code=404, detail="Item not found in Jellyfin")

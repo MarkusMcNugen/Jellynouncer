@@ -537,6 +537,62 @@ class JellyfinAPI:
                 photo_count = 0
                 book_count = 0
                 
+                # Get ALL item counts across ALL libraries using user_items
+                # This matches how we sync - getting everything recursively
+                try:
+                    # Movies
+                    all_movies = self.client.jellyfin.user_items(
+                        params={'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Movie'}
+                    )
+                    movie_count = all_movies.get('TotalRecordCount', 0) if all_movies else 0
+                    self.logger.debug(f"Total movies: {movie_count}")
+                    
+                    # TV Content
+                    all_series = self.client.jellyfin.user_items(
+                        params={'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Series'}
+                    )
+                    series_count = all_series.get('TotalRecordCount', 0) if all_series else 0
+                    self.logger.debug(f"Total series: {series_count}")
+                    
+                    all_seasons = self.client.jellyfin.user_items(
+                        params={'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Season'}
+                    )
+                    season_count = all_seasons.get('TotalRecordCount', 0) if all_seasons else 0
+                    self.logger.debug(f"Total seasons: {season_count}")
+                    
+                    all_episodes = self.client.jellyfin.user_items(
+                        params={'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Episode'}
+                    )
+                    episode_count = all_episodes.get('TotalRecordCount', 0) if all_episodes else 0
+                    self.logger.debug(f"Total episodes: {episode_count}")
+                    
+                    # Music
+                    all_music = self.client.jellyfin.user_items(
+                        params={'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Audio'}
+                    )
+                    music_count = all_music.get('TotalRecordCount', 0) if all_music else 0
+                    self.logger.debug(f"Total music tracks: {music_count}")
+                    
+                    all_albums = self.client.jellyfin.user_items(
+                        params={'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'MusicAlbum'}
+                    )
+                    music_album_count = all_albums.get('TotalRecordCount', 0) if all_albums else 0
+                    self.logger.debug(f"Total music albums: {music_album_count}")
+                    
+                    # Other media types
+                    all_photos = self.client.jellyfin.user_items(
+                        params={'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Photo'}
+                    )
+                    photo_count = all_photos.get('TotalRecordCount', 0) if all_photos else 0
+                    
+                    all_books = self.client.jellyfin.user_items(
+                        params={'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Book'}
+                    )
+                    book_count = all_books.get('TotalRecordCount', 0) if all_books else 0
+                    
+                except Exception as e:
+                    self.logger.warning(f"Could not get item counts: {e}")
+                
                 if libraries and 'Items' in libraries:
                     for library in libraries['Items']:
                         lib_name = library.get('Name', 'Unknown')
@@ -562,34 +618,6 @@ class JellyfinAPI:
                                 'id': lib_id,
                                 'item_count': item_count
                             }
-                            
-                            # Count by type
-                            if lib_type == 'movies':
-                                movie_count += item_count
-                            elif lib_type == 'tvshows':
-                                # Get series, season, and episode counts separately
-                                series_items = self.client.jellyfin.user_items(
-                                    params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Series'}
-                                )
-                                season_items = self.client.jellyfin.user_items(
-                                    params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Season'}
-                                )
-                                episode_items = self.client.jellyfin.user_items(
-                                    params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'Episode'}
-                                )
-                                series_count += series_items.get('TotalRecordCount', 0) if series_items else 0
-                                season_count += season_items.get('TotalRecordCount', 0) if season_items else 0
-                                episode_count += episode_items.get('TotalRecordCount', 0) if episode_items else 0
-                            elif lib_type == 'music':
-                                music_count += item_count
-                                album_items = self.client.jellyfin.user_items(
-                                    params={'ParentId': lib_id, 'Recursive': True, 'Limit': 1, 'IncludeItemTypes': 'MusicAlbum'}
-                                )
-                                music_album_count += album_items.get('TotalRecordCount', 0) if album_items else 0
-                            elif lib_type == 'photos':
-                                photo_count += item_count
-                            elif lib_type == 'books':
-                                book_count += item_count
                                 
                         except Exception as e:
                             self.logger.warning(f"Could not get stats for library {lib_name}: {e}")

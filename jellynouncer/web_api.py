@@ -295,6 +295,10 @@ class OverviewStats(BaseModel):
     jellyfin_stats: Optional[Dict[str, Any]] = None
     historical_stats: Optional[HistoricalStats] = None
     synced_items: Optional[SyncedItems] = None  # Added missing field for database sync stats
+    webhook_stats: Optional[Dict[str, Any]] = None  # Processing pipeline webhook statistics
+    notification_stats: Optional[Dict[str, Any]] = None  # Processing pipeline notification statistics
+    filtering_stats: Optional[Dict[str, Any]] = None  # Processing pipeline filtering statistics
+    channel_routing: Optional[Dict[str, Any]] = None  # Discord channel routing statistics
 
 
 class ConfigUpdate(BaseModel):

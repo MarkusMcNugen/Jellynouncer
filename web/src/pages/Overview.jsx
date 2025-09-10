@@ -730,7 +730,11 @@ const Overview = () => {
                       Notifications Sent
                     </p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatNumber(stats?.notification_stats?.sent || 0)}
+                      {(() => {
+                        const value = stats?.notification_stats?.sent || 0;
+                        console.log('🔍 Notifications Sent value:', value, 'from stats:', stats?.notification_stats);
+                        return formatNumber(value);
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -777,10 +781,13 @@ const Overview = () => {
                       Failed Webhooks
                     </p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatNumber(
-                        (stats?.webhook_stats?.failed || 0) +
-                        (stats?.notification_stats?.failed || 0)
-                      )}
+                      {(() => {
+                        const webhookFailed = stats?.webhook_stats?.failed || 0;
+                        const notifFailed = stats?.notification_stats?.failed || 0;
+                        const total = webhookFailed + notifFailed;
+                        console.log('🔍 Failed stats:', { webhookFailed, notifFailed, total });
+                        return formatNumber(total);
+                      })()}
                     </p>
                   </div>
                 </div>

@@ -165,6 +165,7 @@ export const apiService = {
   
   // Overview
   getOverview: () => api.get('/api/overview'),
+  refreshOverview: () => api.post('/api/overview/refresh'),
   
   // Config
   getConfig: () => api.get('/api/config'),

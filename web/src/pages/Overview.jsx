@@ -57,7 +57,7 @@ const Overview = () => {
     }
   });
 
-  const fetchData = async () => {
+  const fetchData = async (forceRefresh = false) => {
     const fetchTimer = logger.startTimer('[Overview] fetchData execution');
     
     logger.debug('[Overview] fetchData called', { 
@@ -66,12 +66,25 @@ const Overview = () => {
         hasStats: !!stats, 
         hasHealth: !!health, 
         hasError: !!error,
-        statsKeys: stats ? Object.keys(stats) : null
+        statsKeys: stats ? Object.keys(stats) : null,
+        forceRefresh
       }
     });
     
     try {
       setRefreshing(true);
+      
+      // If force refresh requested and not initial load, call refresh endpoint
+      if (forceRefresh && !loading) {
+        logger.debug('[Overview] Triggering force refresh of all stats including Jellyfin');
+        try {
+          await apiService.refreshOverview();
+          logger.info('[Overview] Force refresh initiated');
+        } catch (err) {
+          logger.warn('[Overview] Refresh endpoint failed, continuing with normal fetch', err);
+        }
+      }
+      
       logger.debug('[Overview] Starting parallel API calls');
       
       const apiTimer = logger.startTimer('[Overview] API calls');
@@ -493,7 +506,7 @@ const Overview = () => {
             </p>
           </div>
           <button
-            onClick={fetchData}
+            onClick={() => fetchData(true)}
             disabled={refreshing}
             className={`
               inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md

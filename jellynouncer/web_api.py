@@ -1042,11 +1042,11 @@ class WebInterfaceService:
                 # Also update legacy fields for compatibility
                 stats["total_items"] = db_stats.get("total_items", 0)
                 
-                # Get recent notifications from notification history (last 4 hours, max 10 items)
+                # Get recent notifications from notification history (last 24 hours, max 10 items)
                 try:
                     if self.web_db:
                         # Use the actual notification history with delivery status
-                        recent_notifications = await self.web_db.get_recent_notifications(limit=10, hours=4)
+                        recent_notifications = await self.web_db.get_recent_notifications(limit=10, hours=24)
                         stats["recent_notifications"] = recent_notifications
                     else:
                         # Fallback to old method if web_db not available
@@ -2053,6 +2053,28 @@ async def get_overview(current_user: Optional[Dict] = Depends(check_auth_require
     except Exception as e:
         logger.error(f"[ENDPOINT] /api/overview failed: {type(e).__name__}: {e}", exc_info=True)
         raise
+
+
+@app.post("/api/overview/refresh")
+async def refresh_overview(current_user: Optional[Dict] = Depends(check_auth_required)):
+    """Force refresh all statistics including Jellyfin stats"""
+    logger.info(f"[ENDPOINT] /api/overview/refresh called - user: {current_user.get('username') if current_user else 'anonymous'}")
+    try:
+        # Trigger Jellyfin stats refresh
+        logger.info("Force refreshing Jellyfin stats...")
+        refresh_task = asyncio.create_task(web_service.refresh_jellyfin_stats())
+        
+        # Also get current stats
+        result = await web_service.get_overview_stats()
+        
+        return {
+            "success": True,
+            "message": "Refresh initiated",
+            "stats": result
+        }
+    except Exception as e:
+        logger.error(f"[ENDPOINT] /api/overview/refresh failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/config")

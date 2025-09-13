@@ -541,7 +541,7 @@ const Overview = () => {
                     </div>
                     <div className="flex justify-between">
                       <span><Icon icon="list-ol" className="mr-1" size="xs" />Seasons</span>
-                      <span className="font-medium">{formatNumber(stats?.jellyfin_stats?.season_count || 0)}</span>
+                      <span className="font-medium">{formatNumber(stats?.jellyfin_stats?.season_count || stats?.jellyfin_stats?.SeasonCount || 0)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span><Icon icon="video" className="mr-1" size="xs" />Episodes</span>
@@ -1320,9 +1320,9 @@ const Overview = () => {
             {/* Service Health Status - Consolidated Container */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Service Status</h3>
-              <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 {/* Web Interface Status */}
-                <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Web Interface
@@ -1337,7 +1337,7 @@ const Overview = () => {
                 </div>
                 
                 {/* Webhook Service Status */}
-                <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Webhook Service
@@ -1352,7 +1352,7 @@ const Overview = () => {
                 </div>
                 
                 {/* Database Status */}
-                <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Database
@@ -1366,8 +1366,8 @@ const Overview = () => {
                   </div>
                 </div>
                 
-                {/* Jellyfin Connection - Without border on last item */}
-                <div className="flex items-center justify-between">
+                {/* Jellyfin Connection */}
+                <div className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Jellyfin Server

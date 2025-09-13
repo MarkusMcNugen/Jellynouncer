@@ -414,8 +414,8 @@ class WebDatabaseManager:
                     SUM(sent_to_music) as total_sent_music,
                     SUM(library_scans) as total_library_scans
                 FROM notification_stats
-                WHERE timestamp >= ?
-            """, (cutoff_time,))
+                WHERE hour_bucket >= ?
+            """, (cutoff_str,))
             
             totals_row = cursor.fetchone()
             totals = {
@@ -1094,7 +1094,7 @@ class WebDatabaseManager:
         
         if channel_field:
             now = datetime.now(timezone.utc)
-            hour_bucket = now.strftime("%Y-%m-%d %H:00:00")
+            hour_bucket = now.strftime("%Y-%m-%d %H:00")  # Fixed format to match database
             day_bucket = now.strftime("%Y-%m-%d")
             
             import aiosqlite
@@ -1142,7 +1142,7 @@ class WebDatabaseManager:
         from datetime import datetime, timezone
         
         now = datetime.now(timezone.utc)
-        hour_bucket = now.strftime("%Y-%m-%d %H:00:00")
+        hour_bucket = now.strftime("%Y-%m-%d %H:00")  # Fixed format to be consistent
         day_bucket = now.strftime("%Y-%m-%d")
         
         import aiosqlite

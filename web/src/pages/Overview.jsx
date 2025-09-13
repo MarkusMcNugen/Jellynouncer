@@ -317,7 +317,7 @@ const Overview = () => {
       {
         data: [
           contentStats.total_movies || 0,
-          contentStats.total_series || contentStats.total_tv_shows || 0,  // tv_shows is legacy, should be series
+          contentStats.total_series || 0,  // Use series column, not tv_shows
           contentStats.total_seasons || 0,
           contentStats.total_episodes || 0,
           contentStats.total_music || 0,
@@ -602,7 +602,16 @@ const Overview = () => {
                     Total Library Items
                   </p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {formatNumber(stats?.jellyfin_stats?.total_items || 0)}
+                    {formatNumber(
+                      (stats?.jellyfin_stats?.movie_count || 0) +
+                      (stats?.jellyfin_stats?.series_count || 0) +
+                      (stats?.jellyfin_stats?.season_count || 0) +
+                      (stats?.jellyfin_stats?.episode_count || 0) +
+                      (stats?.jellyfin_stats?.music_count || 0) +
+                      (stats?.jellyfin_stats?.music_album_count || 0) +
+                      (stats?.jellyfin_stats?.photo_count || 0) +
+                      (stats?.jellyfin_stats?.book_count || 0)
+                    )}
                   </p>
                   <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
                     <div className="flex justify-between">
@@ -973,7 +982,7 @@ const Overview = () => {
                 Content Types
               </h3>
               <div className="h-64">
-                {(contentStats.total_movies || contentStats.total_tv_shows || contentStats.total_episodes || contentStats.total_music) ? (
+                {(contentStats.total_movies || contentStats.total_series || contentStats.total_episodes || contentStats.total_music) ? (
                   <Doughnut data={contentTypeChartData} options={Object.assign({}, chartOptions, { aspectRatio: 1 })} />
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-500">

@@ -151,7 +151,7 @@ class WebDatabaseManager:
                     
                     -- Content type stats
                     movies INTEGER DEFAULT 0,
-                    tv_shows INTEGER DEFAULT 0,
+                    tv_shows INTEGER DEFAULT 0,  -- Deprecated, use 'series' instead
                     episodes INTEGER DEFAULT 0,
                     music INTEGER DEFAULT 0,
                     
@@ -342,7 +342,8 @@ class WebDatabaseManager:
                     SUM(deletes_filtered) as deletes_filtered,
                     SUM(mass_renames_caught) as mass_renames,
                     SUM(movies) as movies,
-                    SUM(tv_shows) as tv_shows,
+                    SUM(series) as series,
+                    SUM(seasons) as seasons,
                     SUM(episodes) as episodes,
                     SUM(music) as music,
                     SUM(sent_to_default) as sent_default,
@@ -376,7 +377,8 @@ class WebDatabaseManager:
                     "deletes_filtered": row["deletes_filtered"] or 0,
                     "mass_renames": row["mass_renames"] or 0,
                     "movies": row["movies"] or 0,
-                    "tv_shows": row["tv_shows"] or 0,
+                    "series": row["series"] or 0,
+                    "seasons": row["seasons"] or 0,
                     "episodes": row["episodes"] or 0,
                     "music": row["music"] or 0,
                     "sent_default": row["sent_default"] or 0,
@@ -413,7 +415,8 @@ class WebDatabaseManager:
                         "deletes_filtered": 0,
                         "mass_renames": 0,
                         "movies": 0,
-                        "tv_shows": 0,
+                        "series": 0,
+                        "seasons": 0,
                         "episodes": 0,
                         "music": 0,
                         "sent_default": 0,
@@ -440,7 +443,9 @@ class WebDatabaseManager:
                     SUM(deletes_filtered) as total_deletes_filtered,
                     SUM(mass_renames_caught) as total_mass_renames,
                     SUM(movies) as total_movies,
-                    SUM(tv_shows) as total_tv_shows,
+                    0 as total_tv_shows,  -- Deprecated, kept for backward compatibility
+                    SUM(series) as total_series,
+                    SUM(seasons) as total_seasons,
                     SUM(episodes) as total_episodes,
                     SUM(music) as total_music,
                     SUM(sent_to_default) as total_sent_default,
@@ -468,7 +473,9 @@ class WebDatabaseManager:
                 "total_deletes_filtered": totals_row["total_deletes_filtered"] or 0 if totals_row else 0,
                 "total_mass_renames": totals_row["total_mass_renames"] or 0 if totals_row else 0,
                 "total_movies": totals_row["total_movies"] or 0 if totals_row else 0,
-                "total_tv_shows": totals_row["total_tv_shows"] or 0 if totals_row else 0,
+                "total_tv_shows": 0,  # Deprecated, kept for backward compatibility
+                "total_series": totals_row["total_series"] or 0 if totals_row else 0,
+                "total_seasons": totals_row["total_seasons"] or 0 if totals_row else 0,
                 "total_episodes": totals_row["total_episodes"] or 0 if totals_row else 0,
                 "total_music": totals_row["total_music"] or 0 if totals_row else 0,
                 "total_sent_default": totals_row["total_sent_default"] or 0 if totals_row else 0,
@@ -556,7 +563,7 @@ class WebDatabaseManager:
             elif "episode" in item_type_lower:
                 updates["episodes"] = 1
             elif "series" in item_type_lower or "show" in item_type_lower:
-                updates["tv_shows"] = 1
+                # tv_shows deprecated, don't update it
             elif "music" in item_type_lower or "audio" in item_type_lower:
                 updates["music"] = 1
         
@@ -579,7 +586,8 @@ class WebDatabaseManager:
                     deletes_filtered = deletes_filtered + ?,
                     mass_renames_caught = mass_renames_caught + ?,
                     movies = movies + ?,
-                    tv_shows = tv_shows + ?,
+                    series = series + ?,  -- tv_shows column deprecated
+                    seasons = seasons + ?,
                     episodes = episodes + ?,
                     music = music + ?,
                     sent_to_default = sent_to_default + ?,
@@ -603,7 +611,7 @@ class WebDatabaseManager:
                 updates.get("deletes_filtered", 0),
                 updates.get("mass_renames_caught", 0),
                 updates.get("movies", 0),
-                updates.get("tv_shows", 0),
+                updates.get("series", 0),  # Use series instead of tv_shows
                 updates.get("episodes", 0),
                 updates.get("music", 0),
                 updates.get("sent_to_default", 0),
@@ -623,10 +631,10 @@ class WebDatabaseManager:
                         notifications_sent, notifications_failed, notifications_queued,
                         new_items, upgraded_items, deleted_items, metadata_only_updates,
                         renames_filtered, deletes_filtered, mass_renames_caught,
-                        movies, tv_shows, episodes, music,
+                        movies, series, seasons, episodes, music,
                         sent_to_default, sent_to_movies, sent_to_tv, sent_to_music,
                         library_scans
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     hour_bucket, day_bucket,
                     updates.get("webhooks_received", 0),
@@ -643,7 +651,8 @@ class WebDatabaseManager:
                     updates.get("deletes_filtered", 0),
                     updates.get("mass_renames_caught", 0),
                     updates.get("movies", 0),
-                    updates.get("tv_shows", 0),
+                    updates.get("series", 0),  # Use series instead of tv_shows
+                    updates.get("seasons", 0),
                     updates.get("episodes", 0),
                     updates.get("music", 0),
                     updates.get("sent_to_default", 0),
@@ -1158,9 +1167,19 @@ class WebDatabaseManager:
                             "UPDATE notification_stats SET movies = movies + 1 WHERE hour_bucket = ?",
                             (hour_bucket,)
                         )
-                    elif item_type.lower() in ["series", "episode"]:
+                    elif item_type.lower() == "series":
                         await db.execute(
-                            "UPDATE notification_stats SET tv_shows = tv_shows + 1 WHERE hour_bucket = ?",
+                            "UPDATE notification_stats SET series = series + 1 WHERE hour_bucket = ?",
+                            (hour_bucket,)
+                        )
+                    elif item_type.lower() == "season":
+                        await db.execute(
+                            "UPDATE notification_stats SET seasons = seasons + 1 WHERE hour_bucket = ?",
+                            (hour_bucket,)
+                        )
+                    elif item_type.lower() == "episode":
+                        await db.execute(
+                            "UPDATE notification_stats SET episodes = episodes + 1 WHERE hour_bucket = ?",
                             (hour_bucket,)
                         )
                     elif item_type.lower() == "music":
@@ -1232,9 +1251,19 @@ class WebDatabaseManager:
                         "UPDATE notification_stats SET movies = movies + ? WHERE hour_bucket = ?",
                         (count, hour_bucket)
                     )
-                elif content_type.lower() in ["series", "episode"]:
+                elif content_type.lower() == "series":
                     await db.execute(
-                        "UPDATE notification_stats SET tv_shows = tv_shows + ? WHERE hour_bucket = ?",
+                        "UPDATE notification_stats SET series = series + ? WHERE hour_bucket = ?",
+                        (count, hour_bucket)
+                    )
+                elif content_type.lower() == "season":
+                    await db.execute(
+                        "UPDATE notification_stats SET seasons = seasons + ? WHERE hour_bucket = ?",
+                        (count, hour_bucket)
+                    )
+                elif content_type.lower() == "episode":
+                    await db.execute(
+                        "UPDATE notification_stats SET episodes = episodes + ? WHERE hour_bucket = ?",
                         (count, hour_bucket)
                     )
                 elif content_type.lower() == "music":

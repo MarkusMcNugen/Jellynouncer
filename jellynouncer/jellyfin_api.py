@@ -606,7 +606,7 @@ class JellyfinAPI:
                                     'ParentId': lib_id,
                                     'Recursive': True,
                                     'Limit': 1,
-                                    'IncludeItemTypes': 'Movie,Series,Episode,Audio,MusicAlbum,Photo,Book'
+                                    'IncludeItemTypes': 'Movie,Series,Season,Episode,Audio,MusicAlbum,Photo,Book'
                                 }
                             )
                             

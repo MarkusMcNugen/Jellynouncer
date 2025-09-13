@@ -563,7 +563,9 @@ class WebDatabaseManager:
             elif "episode" in item_type_lower:
                 updates["episodes"] = 1
             elif "series" in item_type_lower or "show" in item_type_lower:
-                # tv_shows deprecated, don't update it
+                updates["series"] = 1  # Use series column instead of tv_shows
+            elif "season" in item_type_lower:
+                updates["seasons"] = 1
             elif "music" in item_type_lower or "audio" in item_type_lower:
                 updates["music"] = 1
         

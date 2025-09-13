@@ -312,12 +312,12 @@ const Overview = () => {
   // Content type distribution
   const contentStats = stats?.historical_stats?.totals || {};
   const contentTypeChartData = {
-    labels: ['Movies', 'Shows', 'Seasons', 'Episodes', 'Music'],
+    labels: ['Movies', 'Series', 'Seasons', 'Episodes', 'Music'],
     datasets: [
       {
         data: [
           contentStats.total_movies || 0,
-          contentStats.total_tv_shows || contentStats.total_tv || 0,
+          contentStats.total_series || contentStats.total_tv_shows || 0,  // tv_shows is legacy, should be series
           contentStats.total_seasons || 0,
           contentStats.total_episodes || 0,
           contentStats.total_music || 0,

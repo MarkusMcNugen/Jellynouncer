@@ -226,7 +226,9 @@ class WebDatabaseManager:
                 ("sent_to_default", "INTEGER DEFAULT 0"),
                 ("sent_to_movies", "INTEGER DEFAULT 0"),
                 ("sent_to_tv", "INTEGER DEFAULT 0"),
-                ("sent_to_music", "INTEGER DEFAULT 0")
+                ("sent_to_music", "INTEGER DEFAULT 0"),
+                ("seasons", "INTEGER DEFAULT 0"),  # Track season notifications separately
+                ("series", "INTEGER DEFAULT 0")    # Track series notifications separately (not episodes)
             ]
             
             for column_name, column_def in new_columns:

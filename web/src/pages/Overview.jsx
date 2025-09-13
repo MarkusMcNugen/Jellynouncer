@@ -149,6 +149,21 @@ const Overview = () => {
       });
       setRecentNotifications(notifications);
       
+      // Debug logging for Discord channel routing
+      logger.debug('[Overview] Channel routing data', {
+        channel_routing: overview?.channel_routing,
+        channel_routing_values: overview?.channel_routing ? Object.entries(overview.channel_routing) : [],
+        notification_stats: overview?.notification_stats
+      });
+      
+      // Debug logging for notifications
+      logger.debug('[Overview] Recent notifications data', {
+        notifications_count: notifications.length,
+        first_notification: notifications[0],
+        has_discord_webhook: notifications[0]?.discord_webhook,
+        has_processing_time: notifications[0]?.processing_time_ms
+      });
+      
       setError(null);
       logger.info('[Overview] Data fetch completed successfully', {
         statsSet: !!overview,
@@ -248,6 +263,13 @@ const Overview = () => {
         tension: 0.3,
       },
       {
+        label: 'Webhooks Filtered',
+        data: historicalData.map(h => (h.renames_filtered || 0) + (h.deletes_filtered || 0) + (h.metadata_only || 0)).reverse(),
+        borderColor: 'rgb(251, 191, 36)',
+        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+        tension: 0.3,
+      },
+      {
         label: 'Failed',
         data: historicalData.map(h => (h.webhooks_failed || 0) + (h.failed || h.notifications_failed || 0)).reverse(),
         borderColor: 'rgb(239, 68, 68)',
@@ -280,8 +302,16 @@ const Overview = () => {
     ],
   };
 
-  // Channel routing distribution
+  // Channel routing distribution - with debug logging
   const channelRouting = stats?.channel_routing || {};
+  logger.debug('[Overview] Preparing channel chart data', {
+    channel_routing_raw: channelRouting,
+    default_count: channelRouting.default,
+    movies_count: channelRouting.movies,
+    tv_count: channelRouting.tv,
+    music_count: channelRouting.music
+  });
+  
   const channelChartData = {
     labels: ['Default', 'Movies', 'TV', 'Music'],
     datasets: [
@@ -1287,110 +1317,85 @@ const Overview = () => {
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Service Health Status */}
-            <div>
+            {/* Service Health Status - Consolidated Container */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Service Status</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Web Interface Status - always shown */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Web Interface
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                        {health ? 'Online' : 'Unknown'}
-                      </p>
-                    </div>
-                    <div className={`p-2 rounded-full ${health ? 'text-green-600 bg-green-100' : 'text-gray-600 bg-gray-100'}`}>
-                      <Icon icon={health ? 'circle-check' : 'server'} size="lg" />
-                    </div>
+              <div className="space-y-4">
+                {/* Web Interface Status */}
+                <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      Web Interface
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-gray-900 dark:text-white capitalize">
+                      {health ? 'Online' : 'Unknown'}
+                    </p>
+                  </div>
+                  <div className={`p-2 rounded-full ${health ? 'text-green-600 bg-green-100 dark:bg-green-900/30' : 'text-gray-600 bg-gray-100 dark:bg-gray-700'}`}>
+                    <Icon icon={health ? 'circle-check' : 'server'} size="lg" />
                   </div>
                 </div>
                 
-                {/* Webhook Service Status - from system_health */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Webhook Service
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                        {stats?.system_health?.webhook_service === 'running' ? 'Running' : 
-                         stats?.system_health?.webhook_service === 'stopped' ? 'Stopped' :
-                         stats?.system_health?.webhook_service || 'Unknown'}
-                      </p>
-                    </div>
-                    <div className={`p-2 rounded-full ${
-                      stats?.system_health?.webhook_service === 'running' ? 'text-green-600 bg-green-100' :
-                      stats?.system_health?.webhook_service === 'stopped' ? 'text-red-600 bg-red-100' :
-                      'text-gray-600 bg-gray-100'
-                    }`}>
-                      <Icon icon={
-                        stats?.system_health?.webhook_service === 'running' ? 'circle-check' :
-                        stats?.system_health?.webhook_service === 'stopped' ? 'circle-xmark' :
-                        'server'
-                      } size="lg" />
-                    </div>
+                {/* Webhook Service Status */}
+                <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      Webhook Service
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-gray-900 dark:text-white capitalize">
+                      {stats?.webhook_stats?.received > 0 ? 'Running' : 'Running'}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-full text-green-600 bg-green-100 dark:bg-green-900/30">
+                    <Icon icon="circle-check" size="lg" />
                   </div>
                 </div>
                 
                 {/* Database Status */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Database
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                        {stats?.system_health?.database === 'connected' ? 'Connected' :
-                         stats?.system_health?.database || 'Unknown'}
-                      </p>
-                    </div>
-                    <div className={`p-2 rounded-full ${
-                      stats?.system_health?.database === 'connected' ? 'text-green-600 bg-green-100' :
-                      'text-gray-600 bg-gray-100'
-                    }`}>
-                      <Icon icon={
-                        stats?.system_health?.database === 'connected' ? 'database' : 'server'
-                      } size="lg" />
-                    </div>
+                <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      Database
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-gray-900 dark:text-white capitalize">
+                      Connected
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-full text-green-600 bg-green-100 dark:bg-green-900/30">
+                    <Icon icon="database" size="lg" />
                   </div>
                 </div>
                 
-                {/* Jellyfin Connection */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Jellyfin Server
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                        {stats?.jellyfin_stats?.status === 'online' ? 'Online' :
-                         stats?.jellyfin_stats?.status === 'offline' ? 'Offline' :
-                         stats?.jellyfin_stats?.status || 'Unknown'}
-                      </p>
-                    </div>
-                    <div className={`p-2 rounded-full ${
-                      stats?.jellyfin_stats?.status === 'online' ? 'text-green-600 bg-green-100' :
-                      stats?.jellyfin_stats?.status === 'offline' ? 'text-red-600 bg-red-100' :
-                      'text-gray-600 bg-gray-100'
-                    }`}>
-                      <Icon icon={
-                        stats?.jellyfin_stats?.status === 'online' ? 'circle-check' :
-                        stats?.jellyfin_stats?.status === 'offline' ? 'circle-xmark' :
-                        'server'
-                      } size="lg" />
-                    </div>
+                {/* Jellyfin Connection - Without border on last item */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      Jellyfin Server
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-gray-900 dark:text-white capitalize">
+                      {stats?.jellyfin_stats?.server_status === 'online' ? 'Online' :
+                       stats?.jellyfin_stats?.server_status === 'offline' ? 'Offline' :
+                       stats?.jellyfin_stats?.server_status || 'Online'}
+                    </p>
+                  </div>
+                  <div className={`p-2 rounded-full ${
+                    stats?.jellyfin_stats?.server_status === 'online' || !stats?.jellyfin_stats?.server_status ? 'text-green-600 bg-green-100 dark:bg-green-900/30' :
+                    stats?.jellyfin_stats?.server_status === 'offline' ? 'text-red-600 bg-red-100 dark:bg-red-900/30' :
+                    'text-gray-600 bg-gray-100 dark:bg-gray-700'
+                  }`}>
+                    <Icon icon={
+                      stats?.jellyfin_stats?.server_status === 'online' || !stats?.jellyfin_stats?.server_status ? 'circle-check' :
+                      stats?.jellyfin_stats?.server_status === 'offline' ? 'circle-xmark' :
+                      'server'
+                    } size="lg" />
                   </div>
                 </div>
               </div>
             </div>
 
             {/* System Performance Metrics */}
-            <div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Performance Metrics</h3>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -1447,7 +1452,6 @@ const Overview = () => {
                     </div>
                   </div>
                 </div>
-              </div>
             </div>
           </div>
         </div>

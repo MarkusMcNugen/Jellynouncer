@@ -821,22 +821,6 @@ class WebDatabaseManager:
             ))
             conn.commit()
     
-    async def update_notification_status(self, item_id: str, status: str, error_message: str = None):
-        """Update the status of the most recent notification for an item"""
-        if not self.initialized:
-            await self.initialize()
-        
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                UPDATE notification_history
-                SET status = ?, error_message = ?
-                WHERE item_id = ?
-                  AND id = (
-                      SELECT MAX(id) FROM notification_history WHERE item_id = ?
-                  )
-            """, (status, error_message, item_id, item_id))
-            conn.commit()
-    
     async def get_recent_notifications(self, limit: int = 20, hours: int = 4) -> list:
         """
         Get recent notifications with their delivery status.
@@ -941,6 +925,10 @@ class WebDatabaseManager:
             conn.commit()
         
         logger.debug(f"Added notification to history: {item_name} ({event_type}) - Status: {status}")
+        
+        # Also update channel routing statistics if notification was sent successfully
+        if status == "sent" and discord_webhook:
+            await self._update_channel_routing_stats(discord_webhook, item_type)
     
     async def update_notification_status(self, item_id: str, status: str, error_message: str = None):
         """Update the status of a notification in history"""
@@ -1087,6 +1075,67 @@ class WebDatabaseManager:
                     await db.commit()
             
             return None
+    
+    async def _update_channel_routing_stats(self, discord_webhook: str, item_type: str = None):
+        """Update channel routing statistics based on webhook URL"""
+        from datetime import datetime, timezone
+        
+        # Determine which channel was used based on webhook URL
+        channel_field = None
+        if discord_webhook:
+            if 'movies' in discord_webhook.lower() or 'Fj6s' in discord_webhook:
+                channel_field = "sent_to_movies"
+            elif 'tv' in discord_webhook.lower() or 'sQl2' in discord_webhook:
+                channel_field = "sent_to_tv"
+            elif 'music' in discord_webhook.lower():
+                channel_field = "sent_to_music"
+            else:
+                channel_field = "sent_to_default"
+        
+        if channel_field:
+            now = datetime.now(timezone.utc)
+            hour_bucket = now.strftime("%Y-%m-%d %H:00:00")
+            day_bucket = now.strftime("%Y-%m-%d")
+            
+            import aiosqlite
+            async with aiosqlite.connect(self.db_path) as db:
+                # First, try to insert a new record for this hour
+                try:
+                    await db.execute(
+                        """INSERT INTO notification_stats (hour_bucket, day_bucket) 
+                           VALUES (?, ?)""",
+                        (hour_bucket, day_bucket)
+                    )
+                except:
+                    # Record already exists for this hour, that's fine
+                    pass
+                
+                # Update the channel routing counter
+                await db.execute(
+                    f"UPDATE notification_stats SET {channel_field} = {channel_field} + 1 WHERE hour_bucket = ?",
+                    (hour_bucket,)
+                )
+                
+                # Also update content type counter
+                if item_type:
+                    if item_type.lower() == "movie":
+                        await db.execute(
+                            "UPDATE notification_stats SET movies = movies + 1 WHERE hour_bucket = ?",
+                            (hour_bucket,)
+                        )
+                    elif item_type.lower() in ["series", "episode"]:
+                        await db.execute(
+                            "UPDATE notification_stats SET tv_shows = tv_shows + 1 WHERE hour_bucket = ?",
+                            (hour_bucket,)
+                        )
+                    elif item_type.lower() == "music":
+                        await db.execute(
+                            "UPDATE notification_stats SET music = music + 1 WHERE hour_bucket = ?",
+                            (hour_bucket,)
+                        )
+                
+                await db.commit()
+                logger.debug(f"Updated channel routing stats: {channel_field} for {item_type}")
     
     async def update_notification_stats(self, stat_type: str, content_type: Optional[str] = None, count: int = 1):
         """Update notification statistics for the current hour"""

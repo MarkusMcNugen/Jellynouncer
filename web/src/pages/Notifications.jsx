@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { IconDuotone, IconLight } from '../components/FontAwesomeIcon';
+import NotificationModal from '../components/NotificationModal';
 import logger from '../services/logger';
 
 const Notifications = () => {
@@ -14,6 +15,8 @@ const Notifications = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
   
   const itemsPerPage = 50;
   
@@ -27,7 +30,7 @@ const Notifications = () => {
       const response = await apiService.getNotifications({
         page,
         limit: itemsPerPage,
-        hours: 4  // Last 4 hours
+        hours: 24  // Last 24 hours
       });
       
       logger.info('[Notifications] Data received', {
@@ -120,7 +123,7 @@ const Notifications = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">All Notifications</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Showing notifications from the last 4 hours ({totalCount} total)
+                Showing notifications from the last 24 hours ({totalCount} total)
               </p>
             </div>
           </div>
@@ -151,7 +154,15 @@ const Notifications = () => {
             {notifications.length > 0 ? (
               <div className="space-y-4">
                 {notifications.map((notification, index) => (
-                  <div key={`${notification.id}-${index}`} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <div 
+                    key={`${notification.id}-${index}`} 
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                    onClick={() => {
+                      logger.debug('[Notifications] Opening modal for notification', notification);
+                      setSelectedNotification(notification);
+                      setModalOpen(true);
+                    }}
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         {/* Header row with icon, title, and badges */}
@@ -281,7 +292,7 @@ const Notifications = () => {
                 <IconDuotone icon="bell-slash" className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size="3x" />
                 <p className="text-gray-500 dark:text-gray-400">No notifications found</p>
                 <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-                  There are no notifications from the last 4 hours
+                  There are no notifications from the last 24 hours
                 </p>
               </div>
             )}
@@ -353,6 +364,17 @@ const Notifications = () => {
           )}
         </div>
       </div>
+      
+      {/* Notification Detail Modal */}
+      <NotificationModal
+        notification={selectedNotification}
+        isOpen={modalOpen}
+        onClose={() => {
+          logger.debug('[Notifications] Closing modal');
+          setModalOpen(false);
+          setSelectedNotification(null);
+        }}
+      />
     </div>
   );
 };

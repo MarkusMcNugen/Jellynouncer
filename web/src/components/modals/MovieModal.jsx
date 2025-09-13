@@ -273,24 +273,82 @@ export default function MovieModal({ isOpen, onClose, notification }) {
 
                   {/* Notification Info */}
                   <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="text-gray-500 dark:text-gray-400">
-                        <span>Event: </span>
-                        <span className={`font-medium ${
-                          notification?.event_type === 'new' ? 'text-green-600 dark:text-green-400' :
-                          notification?.event_type === 'upgraded' ? 'text-blue-600 dark:text-blue-400' :
-                          notification?.event_type === 'deleted' ? 'text-red-600 dark:text-red-400' :
-                          'text-gray-600 dark:text-gray-400'
-                        }`}>
-                          {notification?.event_type === 'new' ? 'Added to Library' :
-                           notification?.event_type === 'upgraded' ? 'Quality Upgraded' :
-                           notification?.event_type === 'deleted' ? 'Removed from Library' :
-                           notification?.event_type}
-                        </span>
+                    <div className="space-y-3">
+                      {/* Event Type and Timestamp */}
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="text-gray-500 dark:text-gray-400">
+                          <span>Event: </span>
+                          <span className={`font-medium ${
+                            (notification?.event_type || notification?.event) === 'new' ? 'text-green-600 dark:text-green-400' :
+                            (notification?.event_type || notification?.event) === 'upgraded' ? 'text-blue-600 dark:text-blue-400' :
+                            (notification?.event_type || notification?.event) === 'deleted' ? 'text-red-600 dark:text-red-400' :
+                            'text-gray-600 dark:text-gray-400'
+                          }`}>
+                            {(notification?.event_type || notification?.event) === 'new' ? 'Added to Library' :
+                             (notification?.event_type || notification?.event) === 'upgraded' ? 'Quality Upgraded' :
+                             (notification?.event_type || notification?.event) === 'deleted' ? 'Removed from Library' :
+                             notification?.event_type || notification?.event}
+                          </span>
+                        </div>
+                        <div className="text-gray-500 dark:text-gray-400">
+                          {new Date(notification?.created_at || notification?.timestamp).toLocaleString()}
+                        </div>
                       </div>
-                      <div className="text-gray-500 dark:text-gray-400">
-                        {new Date(notification?.created_at).toLocaleString()}
+                      
+                      {/* Discord Channel and Processing Time */}
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="text-gray-500 dark:text-gray-400">
+                          {notification?.discord_webhook && (
+                            <>
+                              <span>Channel: </span>
+                              <span className="font-medium text-gray-700 dark:text-gray-300">
+                                {notification.discord_webhook.includes('movies') ? '🎬 Movies' :
+                                 notification.discord_webhook.includes('tv') ? '📺 TV Shows' :
+                                 notification.discord_webhook.includes('music') ? '🎵 Music' :
+                                 '📢 Default'}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        {notification?.processing_time_ms && (
+                          <div className="text-gray-500 dark:text-gray-400">
+                            <span>Processing: </span>
+                            <span className={`font-medium ${
+                              notification.processing_time_ms > 1000 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-700 dark:text-gray-300'
+                            }`}>
+                              {notification.processing_time_ms}ms
+                            </span>
+                          </div>
+                        )}
                       </div>
+                      
+                      {/* Status */}
+                      {notification?.status && (
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="text-gray-500 dark:text-gray-400">
+                            <span>Status: </span>
+                            <span className={`font-medium ${
+                              notification.status === 'sent' || notification.status === 'success' ? 'text-green-600 dark:text-green-400' :
+                              notification.status === 'failed' ? 'text-red-600 dark:text-red-400' :
+                              'text-yellow-600 dark:text-yellow-400'
+                            }`}>
+                              {notification.status === 'sent' || notification.status === 'success' ? '✓ Sent' :
+                               notification.status === 'failed' ? '✗ Failed' :
+                               notification.status}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Error message if failed */}
+                      {notification?.status === 'failed' && notification?.error_message && (
+                        <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-md">
+                          <p className="text-sm text-red-700 dark:text-red-300">
+                            <span className="font-medium">Error: </span>
+                            {notification.error_message}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

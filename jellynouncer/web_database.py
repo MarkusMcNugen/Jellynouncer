@@ -237,6 +237,39 @@ class WebDatabaseManager:
                     except sqlite3.OperationalError:
                         pass  # Column already exists
             
+            # Create jellyfin_stats table for storing server statistics
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS jellyfin_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    server_name TEXT,
+                    server_version TEXT,
+                    server_id TEXT,
+                    server_status TEXT,
+                    total_users INTEGER DEFAULT 0,
+                    active_users INTEGER DEFAULT 0,
+                    movie_count INTEGER DEFAULT 0,
+                    series_count INTEGER DEFAULT 0,
+                    season_count INTEGER DEFAULT 0,
+                    episode_count INTEGER DEFAULT 0,
+                    music_count INTEGER DEFAULT 0,
+                    music_album_count INTEGER DEFAULT 0,
+                    photo_count INTEGER DEFAULT 0,
+                    book_count INTEGER DEFAULT 0,
+                    total_items INTEGER DEFAULT 0,
+                    library_stats TEXT,  -- JSON string
+                    plugin_stats TEXT,   -- JSON string
+                    system_info TEXT,    -- JSON string
+                    last_check TIMESTAMP
+                )
+            """)
+            
+            # Create index for faster lookups
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_jellyfin_stats_timestamp 
+                ON jellyfin_stats(timestamp DESC)
+            """)
+            
             conn.commit()
         
         self.initialized = True
@@ -1209,3 +1242,94 @@ class WebDatabaseManager:
                     )
             
             await db.commit()
+    
+    async def save_jellyfin_stats(self, stats: Dict[str, Any]) -> None:
+        """
+        Save Jellyfin server statistics to the database.
+        
+        Args:
+            stats: Dictionary containing server statistics
+        """
+        import json
+        from datetime import datetime, timezone
+        import aiosqlite
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            # Prepare JSON fields
+            library_stats = json.dumps(stats.get('library_stats', {}))
+            plugin_stats = json.dumps(stats.get('plugin_stats', {}))
+            system_info = json.dumps(stats.get('system_info', {}))
+            
+            await db.execute("""
+                INSERT INTO jellyfin_stats (
+                    server_name, server_version, server_id, server_status,
+                    total_users, active_users,
+                    movie_count, series_count, season_count, episode_count,
+                    music_count, music_album_count, photo_count, book_count,
+                    total_items, library_stats, plugin_stats, system_info,
+                    last_check
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                stats.get('server_name'),
+                stats.get('server_version'),
+                stats.get('server_id'),
+                stats.get('server_status', 'online'),
+                stats.get('total_users', 0),
+                stats.get('active_users', 0),
+                stats.get('movie_count', 0),
+                stats.get('series_count', 0),
+                stats.get('season_count', 0),
+                stats.get('episode_count', 0),
+                stats.get('music_count', 0),
+                stats.get('music_album_count', 0),
+                stats.get('photo_count', 0),
+                stats.get('book_count', 0),
+                stats.get('total_items', 0),
+                library_stats,
+                plugin_stats,
+                system_info,
+                datetime.now(timezone.utc).isoformat()
+            ))
+            await db.commit()
+            logger.debug(f"Saved Jellyfin stats: {stats.get('total_items', 0)} total items, {stats.get('season_count', 0)} seasons")
+    
+    async def get_latest_jellyfin_stats(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the most recent Jellyfin server statistics.
+        
+        Returns:
+            Dictionary with server stats or None if not available
+        """
+        import json
+        import aiosqlite
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT * FROM jellyfin_stats 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+            """)
+            row = await cursor.fetchone()
+            
+            if row:
+                stats = dict(row)
+                # Parse JSON fields
+                if stats.get('library_stats'):
+                    try:
+                        stats['library_stats'] = json.loads(stats['library_stats'])
+                    except:
+                        stats['library_stats'] = {}
+                if stats.get('plugin_stats'):
+                    try:
+                        stats['plugin_stats'] = json.loads(stats['plugin_stats'])
+                    except:
+                        stats['plugin_stats'] = {}
+                if stats.get('system_info'):
+                    try:
+                        stats['system_info'] = json.loads(stats['system_info'])
+                    except:
+                        stats['system_info'] = {}
+                logger.debug(f"Retrieved Jellyfin stats from database: {stats.get('total_items', 0)} items, {stats.get('season_count', 0)} seasons")
+                return stats
+            return None

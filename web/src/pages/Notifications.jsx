@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { IconDuotone, IconLight } from '../components/FontAwesomeIcon';
+import { IconSolid } from '../components/FontAwesomeIcon';
 import NotificationModal from '../components/NotificationModal';
 import logger from '../services/logger';
 
@@ -116,7 +116,7 @@ const Notifications = () => {
               to="/overview"
               className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              <IconLight icon="arrow-left" className="mr-2" />
+              <IconSolid icon="arrow-left" className="mr-2" />
               Back to Overview
             </Link>
             
@@ -137,7 +137,7 @@ const Notifications = () => {
               focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed
             `}
           >
-            <IconLight icon="arrows-rotate" className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            <IconSolid icon="arrows-rotate" className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
@@ -168,7 +168,7 @@ const Notifications = () => {
                         {/* Header row with icon, title, and badges */}
                         <div className="flex items-start gap-3 mb-2">
                           <div className="flex-shrink-0 mt-1">
-                            <IconDuotone icon={getContentIcon(notification.type)} className="text-purple-600 dark:text-purple-400" size="lg" />
+                            <IconSolid icon={getContentIcon(notification.type)} className="text-purple-600 dark:text-purple-400" size="lg" />
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -191,7 +191,7 @@ const Notifications = () => {
                                   notification.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
                                   'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}
                               `}>
-                                <IconLight icon={notification.status === 'sent' || notification.status === 'success' ? 'circle-check' : 
+                                <IconSolid icon={notification.status === 'sent' || notification.status === 'success' ? 'circle-check' : 
                                             notification.status === 'failed' ? 'circle-xmark' : 'clock'} 
                                       className="mr-1" size="xs" />
                                 {notification.status || 'pending'}
@@ -201,7 +201,7 @@ const Notifications = () => {
                             {/* Details Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-2 text-sm">
                               <div className="flex items-center text-gray-600 dark:text-gray-400">
-                                <IconLight icon="clock" className="mr-2" size="sm" />
+                                <IconSolid icon="clock" className="mr-2" size="sm" />
                                 <span title={new Date(notification.timestamp).toLocaleString()}>
                                   {formatTimestamp(notification.timestamp)}
                                 </span>
@@ -209,7 +209,7 @@ const Notifications = () => {
                               
                               {notification.type && (
                                 <div className="flex items-center text-gray-600 dark:text-gray-400">
-                                  <IconLight icon="tag" className="mr-2" size="sm" />
+                                  <IconSolid icon="tag" className="mr-2" size="sm" />
                                   <span className="capitalize">{notification.type}</span>
                                 </div>
                               )}
@@ -217,7 +217,7 @@ const Notifications = () => {
                               {/* Discord Channel */}
                               {notification.discord_webhook && (
                                 <div className="flex items-center text-gray-600 dark:text-gray-400">
-                                  <IconLight icon="message-dots" className="mr-2" size="sm" />
+                                  <IconSolid icon="message-dots" className="mr-2" size="sm" />
                                   <span className="font-medium">
                                     {notification.discord_webhook.includes('movies') ? '🎬 Movies' :
                                      notification.discord_webhook.includes('tv') ? '📺 TV Shows' :
@@ -230,7 +230,7 @@ const Notifications = () => {
                               {/* Processing Time */}
                               {notification.processing_time_ms && (
                                 <div className="flex items-center text-gray-600 dark:text-gray-400">
-                                  <IconLight icon="bolt" className="mr-2" size="sm" />
+                                  <IconSolid icon="bolt" className="mr-2" size="sm" />
                                   <span className={notification.processing_time_ms > 1000 ? 'text-yellow-600 dark:text-yellow-400 font-medium' : ''}>
                                     {notification.processing_time_ms}ms
                                   </span>
@@ -240,7 +240,7 @@ const Notifications = () => {
                               {/* Item ID for debugging */}
                               {notification.id && (
                                 <div className="flex items-center text-gray-500 dark:text-gray-500 text-xs">
-                                  <IconLight icon="fingerprint" className="mr-2" size="sm" />
+                                  <IconSolid icon="fingerprint" className="mr-2" size="sm" />
                                   <span className="font-mono">{notification.id}</span>
                                 </div>
                               )}
@@ -250,7 +250,7 @@ const Notifications = () => {
                             {notification.status === 'failed' && notification.error_message && (
                               <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                                 <div className="flex items-start">
-                                  <IconLight icon="circle-exclamation" className="text-red-500 mr-2 mt-0.5 flex-shrink-0" size="sm" />
+                                  <IconSolid icon="circle-exclamation" className="text-red-500 mr-2 mt-0.5 flex-shrink-0" size="sm" />
                                   <div className="text-sm text-red-700 dark:text-red-300">
                                     <span className="font-medium">Error: </span>
                                     {notification.error_message}
@@ -263,7 +263,7 @@ const Notifications = () => {
                             {notification.event === 'upgraded' && notification.metadata?.changes && (
                               <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
                                 <div className="flex items-start">
-                                  <IconLight icon="arrow-trend-up" className="text-blue-500 mr-2 mt-0.5 flex-shrink-0" size="sm" />
+                                  <IconSolid icon="arrow-trend-up" className="text-blue-500 mr-2 mt-0.5 flex-shrink-0" size="sm" />
                                   <div className="text-sm text-blue-700 dark:text-blue-300">
                                     <span className="font-medium">Quality Improvements:</span>
                                     <ul className="mt-1 space-y-0.5">
@@ -289,7 +289,7 @@ const Notifications = () => {
               </div>
             ) : (
               <div className="text-center py-8">
-                <IconDuotone icon="bell-slash" className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size="3x" />
+                <IconSolid icon="bell-slash" className="mx-auto text-gray-400 dark:text-gray-600 mb-4" size="3x" />
                 <p className="text-gray-500 dark:text-gray-400">No notifications found</p>
                 <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
                   There are no notifications from the last 24 hours
@@ -314,7 +314,7 @@ const Notifications = () => {
                     disabled={currentPage === 1}
                     className="relative inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <IconLight icon="chevron-left" className="mr-1" size="sm" />
+                    <IconSolid icon="chevron-left" className="mr-1" size="sm" />
                     Previous
                   </button>
                   
@@ -356,7 +356,7 @@ const Notifications = () => {
                     className="relative inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next
-                    <IconLight icon="chevron-right" className="ml-1" size="sm" />
+                    <IconSolid icon="chevron-right" className="ml-1" size="sm" />
                   </button>
                 </div>
               </div>

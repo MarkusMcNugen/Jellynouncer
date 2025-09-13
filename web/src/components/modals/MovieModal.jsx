@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { XMarkIcon, FilmIcon, StarIcon, ClockIcon, CalendarIcon, TagIcon } from '@heroicons/react/24/outline'
-import { apiService } from '../../services/api'
+import api from '../../services/api'
 import logger from '../../services/logger'
 
 export default function MovieModal({ isOpen, onClose, notification }) {
@@ -28,7 +28,7 @@ export default function MovieModal({ isOpen, onClose, notification }) {
       setError(null)
       logger.debug(`Fetching movie metadata for item ${notification.item_id}`)
       
-      const response = await apiService.get(`/jellyfin/item/${notification.item_id}`)
+      const response = await api.get(`/api/jellyfin/item/${notification.item_id}`)
       setMetadata(response.data)
       logger.debug('Movie metadata fetched successfully', response.data)
     } catch (err) {

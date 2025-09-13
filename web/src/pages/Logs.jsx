@@ -16,7 +16,7 @@ const Logs = () => {
   const [level, setLevel] = useState('')
   const [component, setComponent] = useState('')
   const [search, setSearch] = useState('')
-  const [autoRefresh, setAutoRefresh] = useState(true)
+  const [autoRefresh, setAutoRefresh] = useState(false)
   const [showStats] = useState(true) // Could be toggled in future
   
   logger.debug('[Logs] State hooks initialized', {
@@ -26,7 +26,7 @@ const Logs = () => {
       level: '',
       component: '',
       search: '',
-      autoRefresh: true,
+      autoRefresh: false,
       showStats: true
     }
   })

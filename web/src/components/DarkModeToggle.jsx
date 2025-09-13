@@ -19,14 +19,18 @@ const DarkModeToggle = () => {
     // Apply theme to document
     const root = document.documentElement;
     
-    if (theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    // Simple logic - if theme is 'dark', add dark class, otherwise remove it
+    if (theme === 'dark') {
       root.classList.add('dark');
+      console.log('[DarkModeToggle] Applied dark mode');
     } else {
       root.classList.remove('dark');
+      console.log('[DarkModeToggle] Applied light mode');
     }
     
     // Save to localStorage
     localStorage.setItem('theme', theme);
+    console.log('[DarkModeToggle] Theme saved:', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -66,30 +70,11 @@ const DarkModeToggle = () => {
     }
   };
 
-  // Listen for system theme changes when in auto mode
+  // Debug: log theme changes
   useEffect(() => {
-    if (theme !== 'auto') return;
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
-    const handleChange = (e) => {
-      const root = document.documentElement;
-      if (e.matches) {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
-    };
-
-    // Set initial state for auto mode
-    handleChange(mediaQuery);
-
-    // Listen for changes
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
+    console.log('[DarkModeToggle] Current theme:', theme);
+    const root = document.documentElement;
+    console.log('[DarkModeToggle] Document classes:', root.className);
   }, [theme]);
 
   return (

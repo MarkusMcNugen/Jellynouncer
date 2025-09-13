@@ -748,16 +748,13 @@ class WebInterfaceService:
                 stats = await self.jellyfin.get_server_stats()
                 self.logger.debug(f"Retrieved Jellyfin stats: {len(stats)} fields")
                 
-                # Save to database
-                if self.db:
-                    self.logger.debug("Saving stats to database...")
-                    await self.db.save_jellyfin_stats(stats)
-                    self.logger.info(f"Jellyfin stats saved to database successfully")
-                elif self.webhook_service and self.webhook_service.db:
-                    self.logger.debug("Saving stats to webhook service database...")
-                    await self.webhook_service.db.save_jellyfin_stats(stats)
+                # Save to web database
+                if self.web_db:
+                    self.logger.debug("Saving stats to web database...")
+                    await self.web_db.save_jellyfin_stats(stats)
+                    self.logger.info(f"Jellyfin stats saved to web database successfully")
                 else:
-                    self.logger.warning("Database not available to save Jellyfin stats")
+                    self.logger.warning("Web database not available to save Jellyfin stats")
                 
                 return stats
             # Fall back to webhook service if available
@@ -766,22 +763,19 @@ class WebInterfaceService:
                 stats = await self.webhook_service.jellyfin.get_server_stats()
                 self.logger.debug(f"Retrieved Jellyfin stats: {len(stats)} fields")
                 
-                # Save to database
-                if self.webhook_service.db:
-                    self.logger.debug("Saving stats to database...")
-                    await self.webhook_service.db.save_jellyfin_stats(stats)
-                    self.logger.info(f"Jellyfin stats saved to database successfully")
+                # Save to web database
+                if self.web_db:
+                    self.logger.debug("Saving stats to web database...")
+                    await self.web_db.save_jellyfin_stats(stats)
+                    self.logger.info(f"Jellyfin stats saved to web database successfully")
                 
                 return stats
             else:
                 self.logger.warning(f"Cannot fetch Jellyfin stats - jellyfin: {self.jellyfin is not None}, webhook_service: {self.webhook_service is not None}")
-                # Try to get from database
-                if self.db:
-                    self.logger.debug("Fetching cached stats from database...")
-                    return await self.db.get_latest_jellyfin_stats()
-                elif self.webhook_service and self.webhook_service.db:
-                    self.logger.debug("Fetching cached stats from webhook service database...")
-                    return await self.webhook_service.db.get_latest_jellyfin_stats()
+                # Try to get from web database
+                if self.web_db:
+                    self.logger.debug("Fetching cached stats from web database...")
+                    return await self.web_db.get_latest_jellyfin_stats()
                 
             return {}
         except Exception as e:
@@ -880,14 +874,11 @@ class WebInterfaceService:
         
         # Get Jellyfin stats from database
         try:
-            self.logger.debug(f"Attempting to get Jellyfin stats - db: {self.db is not None}, webhook_service.db: {self.webhook_service.db if self.webhook_service else None}")
+            self.logger.debug(f"Attempting to get Jellyfin stats - web_db: {self.web_db is not None}")
             jellyfin_stats = None
-            if self.db:
-                self.logger.debug("Getting stats from main database...")
-                jellyfin_stats = await self.db.get_latest_jellyfin_stats()
-            elif self.webhook_service and self.webhook_service.db:
-                self.logger.debug("Getting stats from webhook service database...")
-                jellyfin_stats = await self.webhook_service.db.get_latest_jellyfin_stats()
+            if self.web_db:
+                self.logger.debug("Getting stats from web database...")
+                jellyfin_stats = await self.web_db.get_latest_jellyfin_stats()
             
             self.logger.debug(f"Retrieved jellyfin_stats: {bool(jellyfin_stats)}")
             

@@ -43,6 +43,11 @@ const Overview = () => {
   const [health, setHealth] = useState(null);
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    // Load auto-refresh preference from localStorage
+    const saved = localStorage.getItem('overview-auto-refresh');
+    return saved === null ? true : saved === 'true';
+  });
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   
@@ -211,17 +216,29 @@ const Overview = () => {
     logger.debug('[Overview] useEffect triggered - initial mount');
     void fetchData();
     
-    const interval = setInterval(() => {
-      logger.debug('[Overview] Auto-refresh triggered (30s interval)');
-      fetchData();
-    }, 30000); // Refresh every 30 seconds
+    let interval;
+    if (autoRefresh) {
+      interval = setInterval(() => {
+        logger.debug('[Overview] Auto-refresh triggered (30s interval)');
+        fetchData();
+      }, 30000); // Refresh every 30 seconds
+    }
     
     return () => {
-      logger.debug('[Overview] Component unmounting - clearing interval');
-      clearInterval(interval);
+      if (interval) {
+        logger.debug('[Overview] Component unmounting - clearing interval');
+        clearInterval(interval);
+      }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoRefresh]); // Re-run when autoRefresh changes
 
+
+  const handleAutoRefreshToggle = () => {
+    const newValue = !autoRefresh;
+    setAutoRefresh(newValue);
+    localStorage.setItem('overview-auto-refresh', newValue.toString());
+    logger.debug('[Overview] Auto-refresh toggled', { autoRefresh: newValue });
+  };
 
   const getContentIcon = (type) => {
     switch (type?.toLowerCase()) {
@@ -295,13 +312,14 @@ const Overview = () => {
   // Content type distribution
   const contentStats = stats?.historical_stats?.totals || {};
   const contentTypeChartData = {
-    labels: ['Movies', 'TV Shows', 'Episodes', 'Music'],
+    labels: ['Movies', 'Shows', 'Seasons', 'Episodes', 'Music'],
     datasets: [
       {
         data: [
           contentStats.total_movies || 0,
           contentStats.total_tv_shows || contentStats.total_tv || 0,
-          contentStats.total_episodes || contentStats.total_new || 0,
+          contentStats.total_seasons || 0,
+          contentStats.total_episodes || 0,
           contentStats.total_music || 0,
         ],
         backgroundColor: [
@@ -309,6 +327,7 @@ const Overview = () => {
           'rgba(59, 130, 246, 0.8)',
           'rgba(14, 165, 233, 0.8)',
           'rgba(16, 185, 129, 0.8)',
+          'rgba(251, 191, 36, 0.8)',
         ],
         borderWidth: 0,
       },
@@ -403,6 +422,10 @@ const Overview = () => {
           display: true,
           color: 'rgba(156, 163, 175, 0.1)',
         },
+        ticks: {
+          stepSize: 1,
+          precision: 0,
+        },
       },
       x: {
         grid: {
@@ -420,6 +443,10 @@ const Overview = () => {
       y: {
         ...chartOptions.scales.y,
         stacked: true,
+        ticks: {
+          stepSize: 1,
+          precision: 0,
+        },
       },
       x: {
         ...chartOptions.scales.x,
@@ -505,18 +532,52 @@ const Overview = () => {
               Monitor your Jellynouncer service health and statistics
             </p>
           </div>
-          <button
-            onClick={() => fetchData(true)}
-            disabled={refreshing}
-            className={`
-              inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md
-              text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 
-              focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed
-            `}
-          >
-            <Icon icon="arrows-rotate" className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Auto-refresh toggle */}
+            <div className="flex items-center">
+              <label className="flex items-center cursor-pointer">
+                <span className="mr-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Auto-refresh
+                </span>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={autoRefresh}
+                    onChange={handleAutoRefreshToggle}
+                  />
+                  <div className={`
+                    block w-14 h-8 rounded-full transition-colors duration-200
+                    ${autoRefresh ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-600'}
+                  `}>
+                    <div className={`
+                      absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform duration-200
+                      ${autoRefresh ? 'translate-x-6' : 'translate-x-0'}
+                    `} />
+                  </div>
+                </div>
+                {autoRefresh && (
+                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                    30s
+                  </span>
+                )}
+              </label>
+            </div>
+            
+            {/* Refresh button */}
+            <button
+              onClick={() => fetchData(true)}
+              disabled={refreshing}
+              className={`
+                inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md
+                text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 
+                focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed
+              `}
+            >
+              <Icon icon="arrows-rotate" className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {error && (
